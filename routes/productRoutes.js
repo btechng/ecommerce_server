@@ -15,7 +15,7 @@ router.get("/category/:category", async (req, res) => {
   const category = req.params.category;
   try {
     const products = await Product.find({
-      category: { $regex: new RegExp(category, "i") }, // case-insensitive match
+      category: { $regex: new RegExp(category, "i") },
     });
     res.json(products);
   } catch (err) {
@@ -34,7 +34,7 @@ router.post("/", protect, isAdmin, async (req, res) => {
   }
 });
 
-// ✅ Update an existing product by ID
+// ✅ Update product
 router.put("/:id", protect, isAdmin, async (req, res) => {
   try {
     const updated = await Product.findByIdAndUpdate(req.params.id, req.body, {
@@ -47,7 +47,7 @@ router.put("/:id", protect, isAdmin, async (req, res) => {
   }
 });
 
-// ✅ Delete a product by ID
+// ✅ Delete product
 router.delete("/:id", protect, isAdmin, async (req, res) => {
   try {
     const deleted = await Product.findByIdAndDelete(req.params.id);
@@ -65,6 +65,58 @@ router.get("/categories/list", async (req, res) => {
     res.json(categories);
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch categories" });
+  }
+});
+
+// ✅ Get single product by ID
+router.get("/:id", async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) return res.status(404).json({ error: "Product not found" });
+    res.json(product);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch product" });
+  }
+});
+
+// ✅ Add a product review (prevent duplicate review by same user)
+router.post("/:id/reviews", protect, async (req, res) => {
+  const { comment, rating } = req.body;
+  if (!comment || !rating) {
+    return res.status(400).json({ error: "Comment and rating are required" });
+  }
+
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) return res.status(404).json({ error: "Product not found" });
+
+    const alreadyReviewed = product.reviews.find(
+      (r) => r.userId?.toString() === req.user._id.toString()
+    );
+    if (alreadyReviewed) {
+      return res
+        .status(400)
+        .json({ error: "You have already reviewed this product" });
+    }
+
+    const review = {
+      userId: req.user._id,
+      user: req.user.name || "Anonymous",
+      rating: Number(rating),
+      comment,
+      date: new Date(),
+    };
+
+    product.reviews.push(review);
+    product.numReviews = product.reviews.length;
+    product.rating =
+      product.reviews.reduce((acc, r) => r.rating + acc, 0) /
+      product.numReviews;
+
+    await product.save();
+    res.status(201).json({ message: "Review submitted" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
