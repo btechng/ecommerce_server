@@ -1,12 +1,13 @@
 import mongoose from "mongoose";
 import dotenv from "dotenv";
-import Product from "../models/Product.js";
-import User from "../models/User.js";
+import Product from "./models/Product.js";
+import User from "./models/User.js";
 import bcrypt from "bcryptjs";
 
 dotenv.config();
 
-mongoose.connect(process.env.MONGO_URI)
+mongoose
+  .connect(process.env.MONGO_URI)
   .then(async () => {
     await Product.deleteMany();
     await User.deleteMany();
@@ -16,7 +17,7 @@ mongoose.connect(process.env.MONGO_URI)
       name: "Admin",
       email: "admin@example.com",
       password: adminPassword,
-      role: "admin"
+      role: "admin",
     });
     await adminUser.save();
 
@@ -27,7 +28,7 @@ mongoose.connect(process.env.MONGO_URI)
         imageUrl: "https://via.placeholder.com/200",
         category: "Electronics",
         stock: 10,
-        description: "Affordable smartphone"
+        description: "Affordable smartphone",
       },
       {
         name: "Sneakers",
@@ -35,12 +36,12 @@ mongoose.connect(process.env.MONGO_URI)
         imageUrl: "https://via.placeholder.com/200",
         category: "Fashion",
         stock: 20,
-        description: "Comfortable running shoes"
-      }
+        description: "Comfortable running shoes",
+      },
     ];
 
     await Product.insertMany(sampleProducts);
     console.log("✅ Seeded admin user and sample products");
     process.exit();
   })
-  .catch(err => console.error("❌ Seeding failed:", err));
+  .catch((err) => console.error("❌ Seeding failed:", err));
