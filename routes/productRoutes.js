@@ -1,6 +1,7 @@
 import express from "express";
 import Product from "../models/Product.js";
 import { protect, isAdmin } from "../middleware/authMiddleware.js";
+import slugify from "slugify";
 
 const router = express.Router();
 
@@ -10,12 +11,11 @@ router.get("/", async (req, res) => {
   res.json(products);
 });
 
-// ✅ Get products by category
-router.get("/category/:category", async (req, res) => {
-  const category = req.params.category;
+// ✅ Get products by category slug (faster)
+router.get("/category/:slug", async (req, res) => {
   try {
     const products = await Product.find({
-      category: { $regex: new RegExp(category, "i") },
+      categorySlug: req.params.slug.toLowerCase(),
     });
     res.json(products);
   } catch (err) {
@@ -26,9 +26,14 @@ router.get("/category/:category", async (req, res) => {
 // ✅ Add a new product
 router.post("/", protect, isAdmin, async (req, res) => {
   try {
-    const newProduct = new Product(req.body);
-    await newProduct.save();
-    res.status(201).json(newProduct);
+    const product = new Product(req.body);
+    // Ensure slug is updated even if model hook misses
+    product.categorySlug = slugify(req.body.category, {
+      lower: true,
+      strict: true,
+    });
+    await product.save();
+    res.status(201).json(product);
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -37,10 +42,23 @@ router.post("/", protect, isAdmin, async (req, res) => {
 // ✅ Update product
 router.put("/:id", protect, isAdmin, async (req, res) => {
   try {
-    const updated = await Product.findByIdAndUpdate(req.params.id, req.body, {
+    const updateData = {
+      ...req.body,
+    };
+
+    if (req.body.category) {
+      updateData.categorySlug = slugify(req.body.category, {
+        lower: true,
+        strict: true,
+      });
+    }
+
+    const updated = await Product.findByIdAndUpdate(req.params.id, updateData, {
       new: true,
     });
+
     if (!updated) return res.status(404).json({ error: "Product not found" });
+
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import slugify from "slugify";
 
 const reviewSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
@@ -12,9 +13,10 @@ const productSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
     description: String,
-    price: { type: Number }, // ✅ price is now optional
+    price: { type: Number }, // ✅ optional
     imageUrl: String,
-    category: { type: String, required: true }, // ✅ category is now required
+    category: { type: String, required: true }, // ✅ required
+    categorySlug: { type: String }, // ✅ new field for slug
     stock: { type: Number, default: 0 },
     location: String,
     phoneNumber: String,
@@ -24,5 +26,13 @@ const productSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// ✅ Automatically generate slug from category before saving
+productSchema.pre("save", function (next) {
+  if (this.isModified("category") || !this.categorySlug) {
+    this.categorySlug = slugify(this.category, { lower: true, strict: true });
+  }
+  next();
+});
 
 export default mongoose.model("Product", productSchema);
