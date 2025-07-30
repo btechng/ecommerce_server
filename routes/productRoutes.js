@@ -1,3 +1,4 @@
+// routes/productRoutes.js
 import express from "express";
 import Product from "../models/Product.js";
 import { protect, isAdmin } from "../middleware/authMiddleware.js";
@@ -11,7 +12,7 @@ router.get("/", async (req, res) => {
   res.json(products);
 });
 
-// ✅ Get products by category slug (faster)
+// ✅ Get products by category slug
 router.get("/category/:slug", async (req, res) => {
   try {
     const products = await Product.find({
@@ -23,15 +24,31 @@ router.get("/category/:slug", async (req, res) => {
   }
 });
 
-// ✅ Add a new product
-router.post("/", protect, isAdmin, async (req, res) => {
+// ✅ Add a new product or job
+router.post("/", protect, async (req, res) => {
+  const { category } = req.body;
+
   try {
-    const product = new Product(req.body);
-    // Ensure slug is updated even if model hook misses
-    product.categorySlug = slugify(req.body.category, {
-      lower: true,
-      strict: true,
-    });
+    const categorySlug = slugify(category, { lower: true, strict: true });
+
+    // Allow logged-in users to post jobs
+    if (
+      category.toLowerCase() === "job/vacancy" ||
+      categorySlug === "jobvacancy"
+    ) {
+      const job = new Product({ ...req.body, categorySlug });
+      await job.save();
+      return res.status(201).json(job);
+    }
+
+    // Restrict non-job categories to admin only
+    if (req.user.role !== "admin") {
+      return res
+        .status(403)
+        .json({ error: "Admins only can add non-job products" });
+    }
+
+    const product = new Product({ ...req.body, categorySlug });
     await product.save();
     res.status(201).json(product);
   } catch (err) {
@@ -42,9 +59,7 @@ router.post("/", protect, isAdmin, async (req, res) => {
 // ✅ Update product
 router.put("/:id", protect, isAdmin, async (req, res) => {
   try {
-    const updateData = {
-      ...req.body,
-    };
+    const updateData = { ...req.body };
 
     if (req.body.category) {
       updateData.categorySlug = slugify(req.body.category, {
@@ -97,7 +112,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// ✅ Add a product review (prevent duplicate review by same user)
+// ✅ Add a product review
 router.post("/:id/reviews", protect, async (req, res) => {
   const { comment, rating } = req.body;
   if (!comment || !rating) {
