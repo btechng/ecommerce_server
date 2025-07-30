@@ -1,19 +1,19 @@
 // cartRoutes.js
 import express from "express";
-import authMiddleware from "../middleware/authMiddleware.js";
+import { protect } from "../middleware/authMiddleware.js";
 import User from "../models/User.js";
 import Product from "../models/Product.js";
 
 const router = express.Router();
 
 // ✅ Get user's cart
-router.get("/", authMiddleware, async (req, res) => {
+router.get("/", protect, async (req, res) => {
   const user = await User.findById(req.user.id).populate("cart.product");
   res.json(user.cart);
 });
 
 // ✅ Add to cart
-router.post("/", authMiddleware, async (req, res) => {
+router.post("/", protect, async (req, res) => {
   const { productId, quantity } = req.body;
   const user = await User.findById(req.user.id);
 
@@ -32,7 +32,7 @@ router.post("/", authMiddleware, async (req, res) => {
 });
 
 // ✅ Remove specific item
-router.delete("/:productId", authMiddleware, async (req, res) => {
+router.delete("/:productId", protect, async (req, res) => {
   const user = await User.findById(req.user.id);
   user.cart = user.cart.filter(
     (item) => item.product.toString() !== req.params.productId
@@ -42,7 +42,7 @@ router.delete("/:productId", authMiddleware, async (req, res) => {
 });
 
 // ✅ Clear all cart items after checkout
-router.delete("/clear", authMiddleware, async (req, res) => {
+router.delete("/clear", protect, async (req, res) => {
   const user = await User.findById(req.user.id);
   user.cart = [];
   await user.save();
@@ -50,7 +50,7 @@ router.delete("/clear", authMiddleware, async (req, res) => {
 });
 
 // ✅ Place Order (basic logging)
-router.post("/checkout", authMiddleware, async (req, res) => {
+router.post("/checkout", protect, async (req, res) => {
   const { cart, address, phone, totalAmount } = req.body;
 
   console.log("🧾 Order Received:", {
