@@ -1,8 +1,10 @@
-const express = require("express");
+// cartRoutes.js
+import express from "express";
+import authMiddleware from "../middleware/authMiddleware.js";
+import User from "../models/User.js";
+import Product from "../models/Product.js";
+
 const router = express.Router();
-const authMiddleware = require("../middleware/authMiddleware");
-const User = require("../models/User");
-const Product = require("../models/Product");
 
 // ✅ Get user's cart
 router.get("/", authMiddleware, async (req, res) => {
@@ -51,7 +53,6 @@ router.delete("/clear", authMiddleware, async (req, res) => {
 router.post("/checkout", authMiddleware, async (req, res) => {
   const { cart, address, phone, totalAmount } = req.body;
 
-  // You can store in a real Order model here
   console.log("🧾 Order Received:", {
     user: req.user.id,
     cart,
