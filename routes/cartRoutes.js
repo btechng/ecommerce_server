@@ -63,4 +63,4 @@ router.post("/checkout", authMiddleware, async (req, res) => {
   res.json({ message: "Order received and processing..." });
 });
 
-module.exports = router;
+export default router;
