@@ -1,5 +1,5 @@
 import express from "express";
-import User from "../models/User"; // ✅ Your user schema file
+import User from "../models/User.js"; // ✅ Add `.js` extension
 import bcrypt from "bcryptjs";
 
 const router = express.Router();
@@ -8,7 +8,7 @@ const router = express.Router();
 router.put("/:id", async (req, res) => {
   try {
     const { name, password } = req.body;
-    const update: any = {};
+    const update = {};
     if (name) update.name = name;
     if (password) update.password = await bcrypt.hash(password, 10);
 
