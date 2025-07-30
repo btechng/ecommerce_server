@@ -6,7 +6,23 @@ const userSchema = new mongoose.Schema(
     email: { type: String, unique: true },
     password: String,
     role: { type: String, enum: ["user", "admin"], default: "user" },
-    recentlyViewed: [{ type: mongoose.Schema.Types.ObjectId, ref: "Product" }], // ✅ New field
+
+    // Recently viewed products
+    recentlyViewed: [{ type: mongoose.Schema.Types.ObjectId, ref: "Product" }],
+
+    // 🛒 Cart items
+    cart: [
+      {
+        product: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Product",
+        },
+        quantity: {
+          type: Number,
+          default: 1,
+        },
+      },
+    ],
   },
   { timestamps: true }
 );
