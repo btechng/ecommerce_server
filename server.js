@@ -5,8 +5,8 @@ import dotenv from "dotenv";
 import authRoutes from "./routes/authRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
+import cartRoutes from "./routes/cartRoutes.js";
 
-const cartRoutes = require("./routes/cartRoutes.js");
 dotenv.config();
 const app = express();
 app.use(cors());
