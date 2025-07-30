@@ -26,8 +26,18 @@ router.post("/login", async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ error: "Invalid password" });
 
-    const token = jwt.sign({ userId: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "1d" });
-    res.json({ token, role: user.role });
+    const token = jwt.sign(
+      { userId: user._id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "1d" }
+    );
+
+    // ✅ Include name in the response
+    res.json({
+      token,
+      role: user.role,
+      name: user.name,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
