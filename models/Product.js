@@ -5,21 +5,22 @@ const reviewSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   user: { type: String, required: true },
   comment: { type: String, required: true },
-  rating: { type: Number, required: true },
+  rating: { type: Number, required: true, min: 1, max: 5 },
   date: { type: Date, default: Date.now },
 });
 
 const productSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true },
-    description: String,
-    price: { type: Number }, // ✅ optional
-    imageUrl: String,
-    category: { type: String, required: true }, // ✅ required
-    categorySlug: { type: String }, // ✅ new field for slug
-    stock: { type: Number, default: 0 },
-    location: String,
-    phoneNumber: String,
+    name: { type: String, required: true, trim: true },
+    description: { type: String, required: true },
+    price: { type: Number }, // Optional for job listings
+    imageUrl: { type: String },
+    category: { type: String, required: true },
+    categorySlug: { type: String }, // Auto-generated from category
+    stock: { type: Number, default: 1 }, // Can be 0 for job listings
+    location: { type: String },
+    phoneNumber: { type: String },
+    email: { type: String }, // For job listings
     reviews: [reviewSchema],
     numReviews: { type: Number, default: 0 },
     rating: { type: Number, default: 0 },
@@ -27,7 +28,7 @@ const productSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// ✅ Automatically generate slug from category before saving
+// Auto-generate slug from category
 productSchema.pre("save", function (next) {
   if (this.isModified("category") || !this.categorySlug) {
     this.categorySlug = slugify(this.category, { lower: true, strict: true });
