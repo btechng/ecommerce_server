@@ -2,14 +2,14 @@
 import express from "express";
 import { protect } from "../middleware/authMiddleware.js";
 import User from "../models/User.js";
-import Order from "../models/Order.js"; // ✅ Make sure this model exists and is imported
+import Order from "../models/Order.js";
 
 const router = express.Router();
 
 // ✅ Get user's cart
 router.get("/", protect, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).populate("cart.product");
+    const user = await User.findById(req.user._id).populate("cart.product");
     if (!user) return res.status(404).json({ error: "User not found" });
     res.json(user.cart);
   } catch (err) {
@@ -21,7 +21,7 @@ router.get("/", protect, async (req, res) => {
 router.post("/", protect, async (req, res) => {
   try {
     const { productId, quantity } = req.body;
-    const user = await User.findById(req.user.id);
+    const user = await User.findById(req.user._id);
     if (!user) return res.status(404).json({ error: "User not found" });
 
     const existing = user.cart.find(
@@ -44,7 +44,7 @@ router.post("/", protect, async (req, res) => {
 // ✅ Remove specific item
 router.delete("/:productId", protect, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
+    const user = await User.findById(req.user._id);
     user.cart = user.cart.filter(
       (item) => item.product.toString() !== req.params.productId
     );
@@ -58,7 +58,7 @@ router.delete("/:productId", protect, async (req, res) => {
 // ✅ Clear all cart items
 router.delete("/clear", protect, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
+    const user = await User.findById(req.user._id);
     user.cart = [];
     await user.save();
     res.json({ message: "Cart cleared" });
@@ -77,7 +77,7 @@ router.post("/checkout", protect, async (req, res) => {
     }
 
     const order = new Order({
-      user: req.user.id,
+      user: req.user._id,
       items: cart.map((item) => ({
         product: item.product._id,
         quantity: item.quantity,
@@ -90,7 +90,7 @@ router.post("/checkout", protect, async (req, res) => {
     await order.save();
 
     // Clear user cart after order is placed
-    const user = await User.findById(req.user.id);
+    const user = await User.findById(req.user._id);
     user.cart = [];
     await user.save();
 
