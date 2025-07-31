@@ -1,7 +1,7 @@
 import express from "express";
 import TriviaQuestion from "../models/TriviaQuestion.js";
 import LeaderboardEntry from "../models/LeaderboardEntry.js";
-import { verifyToken } from "../middleware/authMiddleware.js"; // ✅ Middleware
+import { protect } from "../middleware/authMiddleware.js"; // ✅ FIXED
 
 const router = express.Router();
 
@@ -19,7 +19,7 @@ router.get("/random", async (req, res) => {
 });
 
 // ✅ POST score to leaderboard (protected)
-router.post("/leaderboard", verifyToken, async (req, res) => {
+router.post("/leaderboard", protect, async (req, res) => {
   const { score } = req.body;
 
   if (!score || typeof score !== "number") {
@@ -51,7 +51,7 @@ router.get("/leaderboard", async (req, res) => {
 });
 
 // ✅ GET score history for logged-in user
-router.get("/my-scores", verifyToken, async (req, res) => {
+router.get("/my-scores", protect, async (req, res) => {
   try {
     const entries = await LeaderboardEntry.find({ userId: req.user.id }).sort({
       createdAt: -1,
