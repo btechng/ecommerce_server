@@ -1,4 +1,3 @@
-// routes/productRoutes.js
 import express from "express";
 import Product from "../models/Product.js";
 import { protect, isAdmin } from "../middleware/authMiddleware.js";
@@ -6,57 +5,51 @@ import slugify from "slugify";
 
 const router = express.Router();
 
-// ✅ Get all products
+// 🛒 GET: All products
 router.get("/", async (req, res) => {
-  const products = await Product.find();
-  res.json(products);
+  try {
+    const products = await Product.find();
+    res.json(products);
+  } catch {
+    res.status(500).json({ error: "Failed to fetch products" });
+  }
 });
 
-// ✅ Get products by category slug
+// 🛍 GET: Products by category slug
 router.get("/category/:slug", async (req, res) => {
   try {
     const products = await Product.find({
       categorySlug: req.params.slug.toLowerCase(),
     });
     res.json(products);
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Failed to fetch category products" });
   }
 });
 
-// ✅ Add a new product or job
+// ➕ POST: Create product or job listing
 router.post("/", protect, async (req, res) => {
   const { category } = req.body;
 
   try {
     const categorySlug = slugify(category, { lower: true, strict: true });
 
-    // Allow logged-in users to post jobs
-    if (
-      category.toLowerCase() === "job/vacancy" ||
-      categorySlug === "jobvacancy"
-    ) {
-      const job = new Product({ ...req.body, categorySlug });
-      await job.save();
-      return res.status(201).json(job);
+    // Allow regular users to post jobs
+    const isJob =
+      categorySlug === "jobvacancy" || category.toLowerCase() === "job/vacancy";
+    if (!isJob && req.user.role !== "admin") {
+      return res.status(403).json({ error: "Only admins can add products" });
     }
 
-    // Restrict non-job categories to admin only
-    if (req.user.role !== "admin") {
-      return res
-        .status(403)
-        .json({ error: "Admins only can add non-job products" });
-    }
-
-    const product = new Product({ ...req.body, categorySlug });
-    await product.save();
-    res.status(201).json(product);
+    const newProduct = new Product({ ...req.body, categorySlug });
+    await newProduct.save();
+    res.status(201).json(newProduct);
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 });
 
-// ✅ Update product
+// ✏️ PUT: Update product
 router.put("/:id", protect, isAdmin, async (req, res) => {
   try {
     const updateData = { ...req.body };
@@ -73,35 +66,34 @@ router.put("/:id", protect, isAdmin, async (req, res) => {
     });
 
     if (!updated) return res.status(404).json({ error: "Product not found" });
-
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// ✅ Delete product
+// ❌ DELETE: Remove product
 router.delete("/:id", protect, isAdmin, async (req, res) => {
   try {
     const deleted = await Product.findByIdAndDelete(req.params.id);
     if (!deleted) return res.status(404).json({ error: "Product not found" });
-    res.json({ message: "Product deleted" });
+    res.json({ message: "Product deleted successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// ✅ Get all distinct categories
+// 🗂 GET: All distinct categories
 router.get("/categories/list", async (req, res) => {
   try {
     const categories = await Product.distinct("category");
     res.json(categories);
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Failed to fetch categories" });
   }
 });
 
-// ✅ Get single product by ID
+// 🔍 GET: Single product by ID
 router.get("/:id", async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
@@ -112,9 +104,10 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// ✅ Add a product review
+// 🌟 POST: Add product review
 router.post("/:id/reviews", protect, async (req, res) => {
   const { comment, rating } = req.body;
+
   if (!comment || !rating) {
     return res.status(400).json({ error: "Comment and rating are required" });
   }
@@ -129,7 +122,7 @@ router.post("/:id/reviews", protect, async (req, res) => {
     if (alreadyReviewed) {
       return res
         .status(400)
-        .json({ error: "You have already reviewed this product" });
+        .json({ error: "You already reviewed this product" });
     }
 
     const review = {
@@ -143,7 +136,7 @@ router.post("/:id/reviews", protect, async (req, res) => {
     product.reviews.push(review);
     product.numReviews = product.reviews.length;
     product.rating =
-      product.reviews.reduce((acc, r) => r.rating + acc, 0) /
+      product.reviews.reduce((acc, r) => acc + r.rating, 0) /
       product.numReviews;
 
     await product.save();
