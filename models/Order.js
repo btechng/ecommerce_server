@@ -35,8 +35,17 @@ const orderSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["pending", "processing", "shipped", "delivered"],
+      enum: ["pending", "processing", "shipped", "delivered", "Paid"],
       default: "pending",
+    },
+    paymentMethod: {
+      type: String,
+      enum: ["Paystack", "Flutterwave", "Manual", "None"],
+      default: "Paystack",
+    },
+    paymentRef: {
+      type: String,
+      required: true,
     },
   },
   { timestamps: true }
