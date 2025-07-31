@@ -5,7 +5,7 @@ import TriviaQuestion from "./models/TriviaQuestion.js";
 dotenv.config();
 
 const MONGO_URI =
-  "mongodb+srv://talktalknigeria:Young6ix@cluster0.rtljvsk.mongodb.net/triviadb"; // or use process.env.MONGO_URI
+  "mongodb+srv://btechngng:Young6ix@cluster0.cwerqug.mongodb.net/ecommerce"; // or use process.env.MONGO_URI
 
 const questions = [
   {
