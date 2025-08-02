@@ -14,6 +14,7 @@ import cartRoutes from "./routes/cartRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
 import triviaRoutes from "./routes/triviaRoutes.js";
 import paystackWebhook from "./routes/paystackWebhook.js"; // ✅ Webhook route
+import categoryRoutes from "./routes/categoryRoutes.js";
 
 const app = express();
 
@@ -41,6 +42,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/trivia", triviaRoutes);
+app.use("/api/categories", categoryRoutes);
 
 // 🟢 Start server
 const PORT = process.env.PORT || 5000;

@@ -9,17 +9,17 @@ const router = express.Router();
 router.post("/", protect, async (req, res) => {
   const { items, address, phone, totalAmount, paymentRef } = req.body;
 
-  if (!items || items.length === 0) {
+  if (!items || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: "No items in order" });
   }
 
-  if (!paymentRef) {
-    return res.status(400).json({ error: "Missing payment reference" });
+  if (!paymentRef || !address || !phone || !totalAmount) {
+    return res.status(400).json({ error: "Missing required order details" });
   }
 
   try {
     // 🔒 Verify payment with Paystack
-    const response = await axios.get(
+    const verifyRes = await axios.get(
       `https://api.paystack.co/transaction/verify/${paymentRef}`,
       {
         headers: {
@@ -28,9 +28,9 @@ router.post("/", protect, async (req, res) => {
       }
     );
 
-    const paymentData = response.data?.data;
+    const paymentData = verifyRes.data?.data;
 
-    if (response.data.status !== true || paymentData.status !== "success") {
+    if (!verifyRes.data.status || paymentData.status !== "success") {
       return res.status(400).json({ error: "Payment verification failed" });
     }
 
@@ -59,6 +59,7 @@ router.get("/my", protect, async (req, res) => {
     const orders = await Order.find({ user: req.user.id })
       .sort({ createdAt: -1 })
       .populate("items.product");
+
     res.json(orders);
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch orders" });
@@ -70,7 +71,9 @@ router.get("/", protect, isAdmin, async (req, res) => {
   try {
     const allOrders = await Order.find()
       .populate("user", "name email")
-      .populate("items.product");
+      .populate("items.product")
+      .sort({ createdAt: -1 });
+
     res.json(allOrders);
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch all orders" });

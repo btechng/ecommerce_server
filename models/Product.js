@@ -21,6 +21,7 @@ const productSchema = new mongoose.Schema(
     location: { type: String },
     phoneNumber: { type: String },
     email: { type: String }, // For job listings
+    isApproved: { type: Boolean, default: false }, // ✅ Admin approval flag
     reviews: [reviewSchema],
     numReviews: { type: Number, default: 0 },
     rating: { type: Number, default: 0 },

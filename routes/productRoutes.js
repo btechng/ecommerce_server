@@ -5,21 +5,22 @@ import slugify from "slugify";
 
 const router = express.Router();
 
-// 🛒 GET: All products
+// 🛒 GET: All approved products
 router.get("/", async (req, res) => {
   try {
-    const products = await Product.find();
+    const products = await Product.find({ isApproved: true });
     res.json(products);
   } catch {
     res.status(500).json({ error: "Failed to fetch products" });
   }
 });
 
-// 🛍 GET: Products by category slug
+// 🛍 GET: Products by category slug (approved only)
 router.get("/category/:slug", async (req, res) => {
   try {
     const products = await Product.find({
       categorySlug: req.params.slug.toLowerCase(),
+      isApproved: true,
     });
     res.json(products);
   } catch {
@@ -27,33 +28,77 @@ router.get("/category/:slug", async (req, res) => {
   }
 });
 
-// ➕ POST: Create product or job listing
-router.post("/", protect, async (req, res) => {
-  const { category } = req.body;
-
+// ✏️ PUT: Admin approves product
+router.put("/approve/:id", protect, isAdmin, async (req, res) => {
   try {
-    const categorySlug = slugify(category, { lower: true, strict: true });
+    const product = await Product.findById(req.params.id);
+    if (!product) return res.status(404).json({ error: "Product not found" });
 
-    // Allow regular users to post jobs
-    const isJob =
-      categorySlug === "jobvacancy" || category.toLowerCase() === "job/vacancy";
-    if (!isJob && req.user.role !== "admin") {
-      return res.status(403).json({ error: "Only admins can add products" });
-    }
+    product.isApproved = true;
+    product.approvalDate = new Date();
+    await product.save();
 
-    const newProduct = new Product({ ...req.body, categorySlug });
+    res.json({ message: "Product approved", product });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ➕ POST: Authenticated user posts a product (requires admin approval)
+router.post("/post", protect, async (req, res) => {
+  try {
+    const categorySlug = slugify(req.body.category, {
+      lower: true,
+      strict: true,
+    });
+
+    const newProduct = new Product({
+      ...req.body,
+      categorySlug,
+      isApproved: false,
+      postedBy: req.user._id,
+    });
+
     await newProduct.save();
-    res.status(201).json(newProduct);
+    res
+      .status(201)
+      .json({ message: "Product submitted for approval", newProduct });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 });
 
-// ✏️ PUT: Update product
+// 🗂 GET: All distinct categories (approved only)
+router.get("/categories/list", async (req, res) => {
+  try {
+    const categories = await Product.find({ isApproved: true }).distinct(
+      "category"
+    );
+    res.json(categories);
+  } catch {
+    res.status(500).json({ error: "Failed to fetch categories" });
+  }
+});
+
+// 📦 GET: Single product by ID (only if approved)
+router.get("/:id", async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product || !product.isApproved) {
+      return res
+        .status(404)
+        .json({ error: "Product not found or not approved" });
+    }
+    res.json(product);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch product" });
+  }
+});
+
+// ✏️ PUT: Admin edits product
 router.put("/:id", protect, isAdmin, async (req, res) => {
   try {
     const updateData = { ...req.body };
-
     if (req.body.category) {
       updateData.categorySlug = slugify(req.body.category, {
         lower: true,
@@ -72,7 +117,7 @@ router.put("/:id", protect, isAdmin, async (req, res) => {
   }
 });
 
-// ❌ DELETE: Remove product
+// ❌ DELETE: Admin deletes product
 router.delete("/:id", protect, isAdmin, async (req, res) => {
   try {
     const deleted = await Product.findByIdAndDelete(req.params.id);
@@ -83,28 +128,7 @@ router.delete("/:id", protect, isAdmin, async (req, res) => {
   }
 });
 
-// 🗂 GET: All distinct categories
-router.get("/categories/list", async (req, res) => {
-  try {
-    const categories = await Product.distinct("category");
-    res.json(categories);
-  } catch {
-    res.status(500).json({ error: "Failed to fetch categories" });
-  }
-});
-
-// 🔍 GET: Single product by ID
-router.get("/:id", async (req, res) => {
-  try {
-    const product = await Product.findById(req.params.id);
-    if (!product) return res.status(404).json({ error: "Product not found" });
-    res.json(product);
-  } catch (err) {
-    res.status(500).json({ error: "Failed to fetch product" });
-  }
-});
-
-// 🌟 POST: Add product review
+// 🌟 POST: Add product review (approved products only)
 router.post("/:id/reviews", protect, async (req, res) => {
   const { comment, rating } = req.body;
 
@@ -114,7 +138,11 @@ router.post("/:id/reviews", protect, async (req, res) => {
 
   try {
     const product = await Product.findById(req.params.id);
-    if (!product) return res.status(404).json({ error: "Product not found" });
+    if (!product || !product.isApproved) {
+      return res
+        .status(404)
+        .json({ error: "Product not found or not approved" });
+    }
 
     const alreadyReviewed = product.reviews.find(
       (r) => r.userId?.toString() === req.user._id.toString()
