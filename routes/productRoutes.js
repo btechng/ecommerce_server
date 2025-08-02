@@ -5,7 +5,7 @@ import slugify from "slugify";
 
 const router = express.Router();
 
-// ✅ PUBLIC: GET Approved products (no login required)
+// ✅ PUBLIC: Get only approved products
 router.get("/", async (req, res) => {
   try {
     const products = await Product.find({ isApproved: true });
@@ -15,10 +15,10 @@ router.get("/", async (req, res) => {
   }
 });
 
-// ✅ ADMIN: Get all products with ?all=true
+// ✅ ADMIN: Get all products (approved and pending)
 router.get("/admin", protect, isAdmin, async (req, res) => {
   try {
-    const products = await Product.find();
+    const products = await Product.find(); // all products regardless of approval
     res.json(products);
   } catch {
     res.status(500).json({ error: "Failed to fetch all products" });
@@ -38,12 +38,11 @@ router.get("/category/:slug", async (req, res) => {
   }
 });
 
-// ✅ POST: Authenticated user posts product
+// ✅ POST: Authenticated user posts a product
 router.post("/post", protect, async (req, res) => {
   try {
     const category = req.body.category || "";
     const categorySlug = slugify(category, { lower: true, strict: true });
-
     const autoApprove = category.toLowerCase() === "job/vacancy";
 
     const newProduct = new Product({
