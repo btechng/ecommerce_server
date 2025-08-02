@@ -5,21 +5,23 @@ import slugify from "slugify";
 
 const router = express.Router();
 
-// 🛒 GET: Products — Approved only by default, all if ?all=true and admin
-router.get("/", protect, async (req, res) => {
-  const showAll = req.query.all === "true";
-
+// ✅ PUBLIC: GET Approved products (no login required)
+router.get("/", async (req, res) => {
   try {
-    let products;
-    if (showAll && req.user?.role === "admin") {
-      products = await Product.find(); // Admin sees all
-    } else {
-      products = await Product.find({ isApproved: true }); // Public view
-    }
-
+    const products = await Product.find({ isApproved: true });
     res.json(products);
   } catch {
     res.status(500).json({ error: "Failed to fetch products" });
+  }
+});
+
+// ✅ ADMIN: Get all products with ?all=true
+router.get("/admin", protect, isAdmin, async (req, res) => {
+  try {
+    const products = await Product.find();
+    res.json(products);
+  } catch {
+    res.status(500).json({ error: "Failed to fetch all products" });
   }
 });
 
@@ -36,7 +38,7 @@ router.get("/category/:slug", async (req, res) => {
   }
 });
 
-// ✅ POST: Authenticated user posts product (auto-approve if Job/Vacancy)
+// ✅ POST: Authenticated user posts product
 router.post("/post", protect, async (req, res) => {
   try {
     const category = req.body.category || "";
@@ -53,6 +55,7 @@ router.post("/post", protect, async (req, res) => {
     });
 
     await newProduct.save();
+
     res.status(201).json({
       message: autoApprove
         ? "Job/Vacancy posted successfully!"
