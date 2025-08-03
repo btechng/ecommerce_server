@@ -78,4 +78,28 @@ router.post("/buy-data", protect, async (req, res) => {
   }
 });
 
+// 📦 Get Data Plans from Ogdams
+router.get("/data-plans", protect, async (req, res) => {
+  try {
+    const response = await axios.get(
+      "https://simhosting.ogdams.ng/api/v4/get/data/plans",
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.OGDAMS_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (response.data.status === true || response.data.status === "success") {
+      return res.json(response.data.data);
+    } else {
+      return res.status(400).json({ error: "Failed to fetch data plans" });
+    }
+  } catch (err) {
+    console.error("Data Plans Fetch Error:", err.message);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 export default router;
