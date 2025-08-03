@@ -1,7 +1,7 @@
 import express from "express";
 import User from "../models/User.js";
 import bcrypt from "bcryptjs";
-import { protect } from "../middleware/authMiddleware.js"; // ✅ Ensure you have this
+import { protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
@@ -44,15 +44,15 @@ router.post("/:id/view-product", protect, async (req, res) => {
 
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Remove existing entry if duplicate
+    // Remove duplicate if exists
     user.recentlyViewed = user.recentlyViewed.filter(
       (id) => id.toString() !== productId
     );
 
-    // Add to beginning
+    // Add new product to top
     user.recentlyViewed.unshift(productId);
 
-    // Keep only last 10
+    // Limit to 10 items
     if (user.recentlyViewed.length > 10) {
       user.recentlyViewed = user.recentlyViewed.slice(0, 10);
     }
@@ -82,6 +82,25 @@ router.get("/:id/recent-products", protect, async (req, res) => {
     res
       .status(500)
       .json({ message: "Failed to fetch recent products", error: err.message });
+  }
+});
+
+// ✅ Get transaction history (new route)
+router.get("/:id/transactions", protect, async (req, res) => {
+  try {
+    if (req.user.id !== req.params.id && req.user.role !== "admin") {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    const user = await User.findById(req.params.id).select("transactions");
+
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    res.json(user.transactions.reverse()); // latest first
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Failed to fetch transactions", error: err.message });
   }
 });
 
