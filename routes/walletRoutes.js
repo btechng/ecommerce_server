@@ -8,7 +8,7 @@ dotenv.config();
 
 const router = express.Router();
 
-// 💰 Fund Wallet (Paystack)
+// 💰 Fund Wallet (Initialize Paystack)
 router.post("/fund", protect, async (req, res) => {
   const { amount } = req.body;
 
@@ -17,7 +17,7 @@ router.post("/fund", protect, async (req, res) => {
       "https://api.paystack.co/transaction/initialize",
       {
         email: req.user.email,
-        amount: amount * 100,
+        amount: amount * 100, // Paystack uses kobo
         callback_url: `${process.env.FRONTEND_URL}/wallet/callback`,
       },
       {
@@ -35,7 +35,58 @@ router.post("/fund", protect, async (req, res) => {
   }
 });
 
-// 📡 Buy Data (Ogdams API)
+// ✅ 🔐 Verify Paystack Payment and Credit Wallet
+router.get("/verify", protect, async (req, res) => {
+  const { reference } = req.query;
+
+  if (!reference) {
+    return res.status(400).json({ error: "Missing transaction reference" });
+  }
+
+  try {
+    const verifyRes = await axios.get(
+      `https://api.paystack.co/transaction/verify/${reference}`,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+        },
+      }
+    );
+
+    const data = verifyRes.data?.data;
+
+    if (data && data.status === "success") {
+      const amount = data.amount / 100; // Convert to Naira
+      const user = await User.findById(req.user.id);
+      if (!user) return res.status(404).json({ error: "User not found" });
+
+      // ✅ Credit wallet
+      user.balance = (user.balance || 0) + amount;
+
+      user.transactions = user.transactions || [];
+      user.transactions.push({
+        type: "funding",
+        amount,
+        description: `Wallet funded via Paystack (${reference})`,
+        date: new Date(),
+      });
+
+      await user.save();
+
+      return res.json({ success: true, balance: user.balance });
+    } else {
+      return res.status(400).json({ error: "❌ Payment not successful" });
+    }
+  } catch (err) {
+    console.error(
+      "❌ Paystack Verification Error:",
+      err.response?.data || err.message
+    );
+    res.status(500).json({ error: "Payment verification failed" });
+  }
+});
+
+// 📡 Buy Data
 router.post("/buy-data", protect, async (req, res) => {
   const { network, phone, plan, amount } = req.body;
 
@@ -87,7 +138,7 @@ router.post("/buy-data", protect, async (req, res) => {
   }
 });
 
-// 📱 Buy Airtime (Ogdams API)
+// 📱 Buy Airtime
 router.post("/buy-airtime", protect, async (req, res) => {
   const { network, phone, amount } = req.body;
 
@@ -141,11 +192,11 @@ router.post("/buy-airtime", protect, async (req, res) => {
   }
 });
 
-// 📦 Get Data Plans
+// 📦 Get Data Plans (Updated to correct version)
 router.get("/data-plans", protect, async (req, res) => {
   try {
     const response = await axios.get(
-      "https://simhosting.ogdams.ng/api/v4/get/data/plans",
+      "https://simhosting.ogdams.ng/api/v1/data/plans", // ✅ Corrected endpoint
       {
         headers: {
           Authorization: `Bearer ${process.env.OGDAMS_API_KEY}`,
@@ -158,11 +209,16 @@ router.get("/data-plans", protect, async (req, res) => {
     if (Array.isArray(plans)) {
       return res.json(plans);
     } else {
-      return res.status(400).json({ error: "Invalid response from provider" });
+      return res.status(502).json({ error: "Invalid response from provider" });
     }
   } catch (err) {
-    console.error("❌ Data Plans Fetch Error:", err.message);
-    return res.status(500).json({ error: "Internal server error" });
+    console.error(
+      "❌ Data Plans Fetch Error:",
+      err.response?.data || err.message
+    );
+    return res
+      .status(500)
+      .json({ error: "Internal server error fetching data plans" });
   }
 });
 
