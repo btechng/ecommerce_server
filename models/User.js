@@ -44,7 +44,7 @@ const userSchema = new mongoose.Schema(
     },
     balance: {
       type: Number,
-      default: 0,
+      default: "",
     },
     recentlyViewed: [
       {
