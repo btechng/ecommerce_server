@@ -1,9 +1,10 @@
 import mongoose from "mongoose";
 
+// ✅ Embedded schema for user transactions
 const transactionSchema = new mongoose.Schema({
   type: {
     type: String,
-    required: true, // e.g. 'fund', 'purchase'
+    required: true, // e.g. 'fund', 'purchase', 'withdrawal', 'transfer'
     enum: ["fund", "purchase", "withdrawal", "transfer"],
   },
   amount: {
@@ -14,12 +15,17 @@ const transactionSchema = new mongoose.Schema({
     type: String,
     default: "",
   },
+  reference: {
+    type: String, // e.g., Paystack reference
+    default: null,
+  },
   date: {
     type: Date,
     default: Date.now,
   },
 });
 
+// ✅ Main user schema
 const userSchema = new mongoose.Schema(
   {
     name: {
@@ -64,9 +70,12 @@ const userSchema = new mongoose.Schema(
         },
       },
     ],
-    transactions: [transactionSchema], // ✅ New field for storing user transactions
+    transactions: [transactionSchema], // ✅ User transaction history
   },
-  { timestamps: true }
+  {
+    timestamps: true, // adds createdAt and updatedAt
+  }
 );
 
+// ✅ Export User model
 export default mongoose.model("User", userSchema);

@@ -8,7 +8,7 @@ dotenv.config();
 
 const router = express.Router();
 
-// 💰 Fund Wallet (Initialize Paystack)
+// 💰 Initialize Wallet Funding
 router.post("/fund", protect, async (req, res) => {
   const { amount } = req.body;
 
@@ -35,7 +35,7 @@ router.post("/fund", protect, async (req, res) => {
   }
 });
 
-// ✅ 🔐 Verify Paystack Payment and Credit Wallet
+// ✅ Verify and Credit Wallet
 router.get("/verify", protect, async (req, res) => {
   const { reference } = req.query;
 
@@ -53,14 +53,13 @@ router.get("/verify", protect, async (req, res) => {
       }
     );
 
-    const data = verifyRes.data?.data;
+    const { status, data } = verifyRes.data;
 
-    if (data && data.status === "success") {
-      const amount = data.amount / 100; // Convert to Naira
+    if (status && data.status === "success") {
+      const amount = data.amount / 100; // Convert from kobo
       const user = await User.findById(req.user.id);
       if (!user) return res.status(404).json({ error: "User not found" });
 
-      // ✅ Credit wallet
       user.balance = (user.balance || 0) + amount;
 
       user.transactions = user.transactions || [];
@@ -73,9 +72,15 @@ router.get("/verify", protect, async (req, res) => {
 
       await user.save();
 
-      return res.json({ success: true, balance: user.balance });
+      return res.json({
+        success: true,
+        message: "✅ Wallet funded successfully",
+        balance: user.balance,
+      });
     } else {
-      return res.status(400).json({ error: "❌ Payment not successful" });
+      return res
+        .status(400)
+        .json({ error: "❌ Payment not verified as successful" });
     }
   } catch (err) {
     console.error(
@@ -93,7 +98,7 @@ router.post("/buy-data", protect, async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
     if (!user || user.balance < amount) {
-      return res.status(400).json({ error: "Insufficient balance" });
+      return res.status(400).json({ error: "❌ Insufficient balance" });
     }
 
     const ogdamsRes = await axios.post(
@@ -192,11 +197,11 @@ router.post("/buy-airtime", protect, async (req, res) => {
   }
 });
 
-// 📦 Get Data Plans (Updated to correct version)
+// 📦 Get Data Plans
 router.get("/data-plans", protect, async (req, res) => {
   try {
     const response = await axios.get(
-      "https://simhosting.ogdams.ng/api/v1/data/plans", // ✅ Corrected endpoint
+      "https://simhosting.ogdams.ng/api/v1/data/plans",
       {
         headers: {
           Authorization: `Bearer ${process.env.OGDAMS_API_KEY}`,
