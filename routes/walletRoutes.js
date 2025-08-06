@@ -1,14 +1,15 @@
 import express from "express";
 import axios from "axios";
+import crypto from "crypto";
 import dotenv from "dotenv";
-import { protect, isAdmin } from "../middleware/authMiddleware.js";
 import User from "../models/User.js";
+import { protect, isAdmin } from "../middleware/authMiddleware.js";
 
 dotenv.config();
 
 const router = express.Router();
 
-// 💰 Fund Wallet - Initialize Payment
+// 💰 Fund Wallet (Initiate Paystack)
 router.post("/fund", protect, async (req, res) => {
   const { amount } = req.body;
 
@@ -18,95 +19,110 @@ router.post("/fund", protect, async (req, res) => {
       {
         email: req.user.email,
         amount: amount * 100, // Paystack uses kobo
-        callback_url: `${process.env.FRONTEND_URL}/wallet/callback`,
       },
       {
         headers: {
           Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-          "Content-Type": "application/json",
         },
       }
     );
 
     res.json(response.data);
   } catch (err) {
-    console.error("❌ Paystack Init Error:", err.response?.data || err.message);
-    res.status(500).json({ error: "Funding initiation failed" });
+    console.error("❌ Fund Wallet Error:", err.message);
+    res.status(500).json({ error: "Payment initialization failed" });
   }
 });
 
-// 🔍 Verify Wallet Funding - Optional Frontend Call
-router.get("/verify", protect, async (req, res) => {
-  const { reference } = req.query;
+// ✅ Webhook to verify Paystack transaction and fund user wallet
+router.post(
+  "/webhook",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    const secret = process.env.PAYSTACK_SECRET_KEY;
+    const hash = crypto
+      .createHmac("sha512", secret)
+      .update(req.body)
+      .digest("hex");
+    const signature = req.headers["x-paystack-signature"];
 
-  if (!reference) {
-    return res.status(400).json({ error: "Missing transaction reference" });
-  }
-
-  try {
-    const verifyRes = await axios.get(
-      `https://api.paystack.co/transaction/verify/${reference}`,
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-        },
-      }
-    );
-
-    const { status, data } = verifyRes.data;
-    console.log("🔁 Paystack verification response:", data);
-
-    if (status && data.status === "success") {
-      const amount = data.amount / 100;
-      const user = await User.findById(req.user.id);
-      if (!user) return res.status(404).json({ error: "User not found" });
-
-      const alreadyFunded = user.transactions?.some(
-        (tx) => tx.reference === reference
-      );
-
-      if (alreadyFunded) {
-        console.log(`⚠️ Duplicate: Wallet already funded for ${reference}`);
-        return res.json({
-          success: true,
-          message: "✅ Wallet already funded",
-          balance: user.balance,
-        });
-      }
-
-      user.balance = (user.balance || 0) + amount;
-      user.transactions = user.transactions || [];
-      user.transactions.push({
-        type: "fund",
-        amount,
-        description: `Wallet funded via Paystack`,
-        reference,
-        status: "success",
-        channel: data.channel,
-        gateway_response: data.gateway_response,
-        date: new Date(),
-      });
-
-      await user.save();
-
-      console.log(`✅ Wallet credited ₦${amount} for ${user.email}`);
-      return res.json({
-        success: true,
-        message: "✅ Wallet funded successfully",
-        balance: user.balance,
-      });
-    } else {
-      return res
-        .status(400)
-        .json({ error: "❌ Payment not verified as successful" });
+    if (hash !== signature) {
+      return res.status(401).json({ error: "Unauthorized" });
     }
+
+    const event = JSON.parse(req.body.toString());
+
+    if (event.event === "charge.success") {
+      const email = event.data.customer.email;
+      const amount = event.data.amount / 100;
+      const reference = event.data.reference;
+
+      try {
+        const user = await User.findOne({ email });
+
+        if (!user) {
+          return res.status(404).json({ error: "User not found" });
+        }
+
+        const alreadyExists = user.transactions?.some(
+          (tx) => tx.reference === reference
+        );
+
+        if (alreadyExists) {
+          console.log("⚠️ Duplicate transaction detected:", reference);
+          return res.sendStatus(200);
+        }
+
+        user.balance = (user.balance || 0) + amount;
+        user.transactions = user.transactions || [];
+        user.transactions.push({
+          type: "fund",
+          amount,
+          description: "Wallet funded via Paystack",
+          reference,
+          status: "success",
+          channel: event.data.channel || "paystack",
+          gateway_response: event.data.gateway_response || "",
+          date: new Date(),
+        });
+
+        await user.save();
+
+        console.log(`✅ Wallet funded: ₦${amount} → ${user.email}`);
+        res.sendStatus(200);
+      } catch (err) {
+        console.error("❌ Wallet Update Error:", err.message);
+        res.status(500).json({ error: "Wallet update failed" });
+      }
+    } else {
+      res.sendStatus(200); // Accept other events silently
+    }
+  }
+);
+
+// ✅ Get Wallet Balance
+router.get("/balance", protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select("balance");
+    res.json({ balance: user.balance || 0 });
   } catch (err) {
-    console.error("❌ Verification Error:", err.response?.data || err.message);
-    res.status(500).json({ error: "Payment verification failed" });
+    console.error("❌ Balance Error:", err.message);
+    res.status(500).json({ error: "Failed to fetch balance" });
   }
 });
 
-// 🛠️ Manual Credit Wallet by Email (Admin Only)
+// ✅ Get Wallet Transactions
+router.get("/transactions", protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select("transactions");
+    res.json({ transactions: user.transactions || [] });
+  } catch (err) {
+    console.error("❌ Transactions Error:", err.message);
+    res.status(500).json({ error: "Failed to fetch transactions" });
+  }
+});
+
+// ✅ Manual Credit by Admin
 router.post("/manual-credit", protect, isAdmin, async (req, res) => {
   const { email, amount } = req.body;
 
@@ -127,7 +143,9 @@ router.post("/manual-credit", protect, isAdmin, async (req, res) => {
       type: "fund",
       amount,
       description: `Manual wallet top-up by admin`,
+      reference: `MANUAL-${Date.now()}`,
       status: "success",
+      channel: "manual",
       date: new Date(),
     });
 
