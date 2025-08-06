@@ -1,5 +1,3 @@
-// routes/walletRoutes.js
-
 import express from "express";
 import axios from "axios";
 import dotenv from "dotenv";
@@ -10,7 +8,7 @@ dotenv.config();
 
 const router = express.Router();
 
-// 💰 Fund Wallet
+// 💰 Fund Wallet - Initialize Payment
 router.post("/fund", protect, async (req, res) => {
   const { amount } = req.body;
 
@@ -19,7 +17,7 @@ router.post("/fund", protect, async (req, res) => {
       "https://api.paystack.co/transaction/initialize",
       {
         email: req.user.email,
-        amount: amount * 100,
+        amount: amount * 100, // Paystack uses kobo
         callback_url: `${process.env.FRONTEND_URL}/wallet/callback`,
       },
       {
@@ -37,7 +35,8 @@ router.post("/fund", protect, async (req, res) => {
   }
 });
 
-// 🔍 Verify Wallet Funding
+/*
+// 🔍 Verify Wallet Funding - Disabled (auto-fund via webhook now)
 router.get("/verify", protect, async (req, res) => {
   const { reference } = req.query;
 
@@ -56,18 +55,19 @@ router.get("/verify", protect, async (req, res) => {
     );
 
     const { status, data } = verifyRes.data;
+    console.log("🔁 Paystack verification response:", data);
 
     if (status && data.status === "success") {
       const amount = data.amount / 100;
       const user = await User.findById(req.user.id);
       if (!user) return res.status(404).json({ error: "User not found" });
 
-      // Prevent duplicate funding
       const alreadyFunded = user.transactions?.some((tx) =>
         tx.description?.includes(reference)
       );
 
       if (alreadyFunded) {
+        console.log(`⚠️ Duplicate: Wallet already funded for ${reference}`);
         return res.json({
           success: true,
           message: "✅ Wallet already funded",
@@ -86,6 +86,7 @@ router.get("/verify", protect, async (req, res) => {
 
       await user.save();
 
+      console.log(`✅ Wallet credited ₦${amount} for ${user.email}`);
       return res.json({
         success: true,
         message: "✅ Wallet funded successfully",
@@ -101,5 +102,6 @@ router.get("/verify", protect, async (req, res) => {
     res.status(500).json({ error: "Payment verification failed" });
   }
 });
+*/
 
 export default router;
