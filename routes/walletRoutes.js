@@ -35,8 +35,7 @@ router.post("/fund", protect, async (req, res) => {
   }
 });
 
-/*
-// 🔍 Verify Wallet Funding - Disabled (auto-fund via webhook now)
+// 🔍 Verify Wallet Funding - Optional Frontend Call
 router.get("/verify", protect, async (req, res) => {
   const { reference } = req.query;
 
@@ -58,10 +57,11 @@ router.get("/verify", protect, async (req, res) => {
     console.log("🔁 Paystack verification response:", data);
 
     if (status && data.status === "success") {
-      const amount = data.amount / 100;
+      const amount = data.amount / 100; // convert from kobo to naira
       const user = await User.findById(req.user.id);
       if (!user) return res.status(404).json({ error: "User not found" });
 
+      // ✅ Check if wallet already funded with this reference
       const alreadyFunded = user.transactions?.some((tx) =>
         tx.description?.includes(reference)
       );
@@ -75,6 +75,7 @@ router.get("/verify", protect, async (req, res) => {
         });
       }
 
+      // 💰 Fund wallet now
       user.balance = (user.balance || 0) + amount;
       user.transactions = user.transactions || [];
       user.transactions.push({
@@ -102,6 +103,5 @@ router.get("/verify", protect, async (req, res) => {
     res.status(500).json({ error: "Payment verification failed" });
   }
 });
-*/
 
 export default router;
