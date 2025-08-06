@@ -5,6 +5,25 @@ import { protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
+// ✅ Get user profile by id (must be logged in)
+router.get("/:id", protect, async (req, res) => {
+  try {
+    if (req.user.id !== req.params.id && req.user.role !== "admin") {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    const user = await User.findById(req.params.id).select("-password -__v");
+
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    res.json(user);
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Failed to fetch user", error: err.message });
+  }
+});
+
 // ✅ Update user profile (must be logged in)
 router.put("/:id", protect, async (req, res) => {
   try {
