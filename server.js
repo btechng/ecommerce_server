@@ -19,16 +19,16 @@ import paystackWebhook from "./routes/paystackWebhook.js";
 
 const app = express();
 
-// 🔐 Paystack webhook requires raw body
+// 🔐 Paystack webhook requires raw body middleware BEFORE express.json()
 app.use(
   "/api/webhook/paystack",
   express.raw({ type: "application/json" }),
   paystackWebhook
 );
 
-// 📦 Middleware
+// 📦 General Middleware (after webhook)
 app.use(cors());
-app.use(express.json()); // after webhook
+app.use(express.json());
 
 // 🛠 MongoDB Connect
 mongoose

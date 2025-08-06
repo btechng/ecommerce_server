@@ -1,14 +1,16 @@
+// routes/walletRoutes.js
+
 import express from "express";
 import axios from "axios";
+import dotenv from "dotenv";
 import { protect } from "../middleware/authMiddleware.js";
 import User from "../models/User.js";
-import dotenv from "dotenv";
 
 dotenv.config();
 
 const router = express.Router();
 
-// 💰 Initialize Wallet Funding
+// 💰 Fund Wallet
 router.post("/fund", protect, async (req, res) => {
   const { amount } = req.body;
 
@@ -17,7 +19,7 @@ router.post("/fund", protect, async (req, res) => {
       "https://api.paystack.co/transaction/initialize",
       {
         email: req.user.email,
-        amount: amount * 100, // Paystack uses kobo
+        amount: amount * 100,
         callback_url: `${process.env.FRONTEND_URL}/wallet/callback`,
       },
       {
@@ -35,7 +37,7 @@ router.post("/fund", protect, async (req, res) => {
   }
 });
 
-// ✅ Verify and Credit Wallet
+// 🔍 Verify Wallet Funding
 router.get("/verify", protect, async (req, res) => {
   const { reference } = req.query;
 
@@ -56,12 +58,24 @@ router.get("/verify", protect, async (req, res) => {
     const { status, data } = verifyRes.data;
 
     if (status && data.status === "success") {
-      const amount = data.amount / 100; // Convert from kobo
+      const amount = data.amount / 100;
       const user = await User.findById(req.user.id);
       if (!user) return res.status(404).json({ error: "User not found" });
 
-      user.balance = (user.balance || 0) + amount;
+      // Prevent duplicate funding
+      const alreadyFunded = user.transactions?.some((tx) =>
+        tx.description?.includes(reference)
+      );
 
+      if (alreadyFunded) {
+        return res.json({
+          success: true,
+          message: "✅ Wallet already funded",
+          balance: user.balance,
+        });
+      }
+
+      user.balance = (user.balance || 0) + amount;
       user.transactions = user.transactions || [];
       user.transactions.push({
         type: "funding",
@@ -83,147 +97,8 @@ router.get("/verify", protect, async (req, res) => {
         .json({ error: "❌ Payment not verified as successful" });
     }
   } catch (err) {
-    console.error(
-      "❌ Paystack Verification Error:",
-      err.response?.data || err.message
-    );
+    console.error("❌ Verification Error:", err.response?.data || err.message);
     res.status(500).json({ error: "Payment verification failed" });
-  }
-});
-
-// 📡 Buy Data
-router.post("/buy-data", protect, async (req, res) => {
-  const { network, phone, plan, amount } = req.body;
-
-  try {
-    const user = await User.findById(req.user.id);
-    if (!user || user.balance < amount) {
-      return res.status(400).json({ error: "❌ Insufficient balance" });
-    }
-
-    const ogdamsRes = await axios.post(
-      "https://simhosting.ogdams.ng/api/v1/vend/data",
-      {
-        network,
-        mobile_number: phone,
-        plan,
-        amount,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.OGDAMS_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    if (ogdamsRes.data.status === true || ogdamsRes.data.status === "success") {
-      user.balance -= amount;
-
-      user.transactions = user.transactions || [];
-      user.transactions.push({
-        type: "data",
-        amount,
-        description: `${network} Data Plan for ${phone}`,
-        date: new Date(),
-      });
-
-      await user.save();
-
-      return res.json({
-        message: "✅ Data purchase successful",
-        data: ogdamsRes.data,
-      });
-    } else {
-      return res.status(400).json({ error: "❌ Data purchase failed" });
-    }
-  } catch (err) {
-    console.error("❌ Buy Data Error:", err.message);
-    res.status(500).json({ error: "Something went wrong" });
-  }
-});
-
-// 📱 Buy Airtime
-router.post("/buy-airtime", protect, async (req, res) => {
-  const { network, phone, amount } = req.body;
-
-  try {
-    const user = await User.findById(req.user.id);
-    if (!user || user.balance < amount) {
-      return res.status(400).json({ error: "❌ Insufficient balance" });
-    }
-
-    const airtimeRes = await axios.post(
-      "https://simhosting.ogdams.ng/api/v1/vend/airtime",
-      {
-        network,
-        mobile_number: phone,
-        amount,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.OGDAMS_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    if (
-      airtimeRes.data.status === true ||
-      airtimeRes.data.status === "success"
-    ) {
-      user.balance -= amount;
-
-      user.transactions = user.transactions || [];
-      user.transactions.push({
-        type: "airtime",
-        amount,
-        description: `${network} Airtime for ${phone}`,
-        date: new Date(),
-      });
-
-      await user.save();
-
-      return res.json({
-        message: "✅ Airtime purchase successful",
-        data: airtimeRes.data,
-      });
-    } else {
-      return res.status(400).json({ error: "❌ Airtime purchase failed" });
-    }
-  } catch (err) {
-    console.error("❌ Airtime Error:", err.response?.data || err.message);
-    res.status(500).json({ error: "Server error during airtime purchase" });
-  }
-});
-
-// 📦 Get Data Plans
-router.get("/data-plans", protect, async (req, res) => {
-  try {
-    const response = await axios.get(
-      "https://simhosting.ogdams.ng/api/v1/data/plans",
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.OGDAMS_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    const plans = response.data?.data;
-    if (Array.isArray(plans)) {
-      return res.json(plans);
-    } else {
-      return res.status(502).json({ error: "Invalid response from provider" });
-    }
-  } catch (err) {
-    console.error(
-      "❌ Data Plans Fetch Error:",
-      err.response?.data || err.message
-    );
-    return res
-      .status(500)
-      .json({ error: "Internal server error fetching data plans" });
   }
 });
 
