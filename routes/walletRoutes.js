@@ -2,7 +2,6 @@ import express from "express";
 import axios from "axios";
 import { protect, adminOnly } from "../middleware/authMiddleware.js";
 import User from "../models/User.js";
-import WalletTransaction from "../models/WalletTransaction.js";
 import dotenv from "dotenv";
 
 dotenv.config();
