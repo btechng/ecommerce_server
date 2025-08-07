@@ -119,10 +119,15 @@ router.delete("/:id", protect, isAdmin, async (req, res) => {
 // GET: Admin fetches pending products
 router.get("/pending", protect, isAdmin, async (req, res) => {
   try {
-    const pendingProducts = await Product.find({ isApproved: false }).populate("postedBy", "name email");
+    console.log("✅ [ADMIN] Fetching pending products...");
+
+    const pendingProducts = await Product.find({ isApproved: false });
+
+    console.log("🔍 Found:", pendingProducts.length, "pending products");
     res.json(pendingProducts);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("❌ Error in /pending route:", err);
+    res.status(500).json({ error: err.message || "Server error" });
   }
 });
 
