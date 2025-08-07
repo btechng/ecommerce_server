@@ -3,11 +3,23 @@ import axios from "axios";
 import crypto from "crypto";
 import dotenv from "dotenv";
 import User from "../models/User.js";
+import AirtimeRequest from "../models/AirtimeRequest.js";
 import { protect, isAdmin } from "../middleware/authMiddleware.js";
+import { authMiddleware } from "../middleware/authMiddleware.js"; // in case `protect !== authMiddleware`
 
 dotenv.config();
-
 const router = express.Router();
+
+// 🧾 ADMIN: Get All Airtime Requests
+router.get("/requests", authMiddleware, isAdmin, async (req, res) => {
+  try {
+    const requests = await AirtimeRequest.find().populate("userId", "name email");
+    res.json(requests);
+  } catch (err) {
+    console.error("❌ Request Fetch Error:", err.message);
+    res.status(500).json({ error: "Failed to fetch airtime requests" });
+  }
+});
 
 // 💰 Fund Wallet (Initiate Paystack)
 router.post("/fund", protect, async (req, res) => {
@@ -60,18 +72,12 @@ router.post(
       try {
         const user = await User.findOne({ email });
 
-        if (!user) {
-          return res.status(404).json({ error: "User not found" });
-        }
+        if (!user) return res.status(404).json({ error: "User not found" });
 
         const alreadyExists = user.transactions?.some(
           (tx) => tx.reference === reference
         );
-
-        if (alreadyExists) {
-          console.log("⚠️ Duplicate transaction detected:", reference);
-          return res.sendStatus(200);
-        }
+        if (alreadyExists) return res.sendStatus(200);
 
         user.balance = (user.balance || 0) + amount;
         user.transactions = user.transactions || [];
@@ -87,7 +93,6 @@ router.post(
         });
 
         await user.save();
-
         console.log(`✅ Wallet funded: ₦${amount} → ${user.email}`);
         res.sendStatus(200);
       } catch (err) {
@@ -95,7 +100,7 @@ router.post(
         res.status(500).json({ error: "Wallet update failed" });
       }
     } else {
-      res.sendStatus(200); // Accept other events silently
+      res.sendStatus(200);
     }
   }
 );
@@ -132,10 +137,7 @@ router.post("/manual-credit", protect, isAdmin, async (req, res) => {
 
   try {
     const user = await User.findOne({ email });
-
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
+    if (!user) return res.status(404).json({ error: "User not found" });
 
     user.balance = (user.balance || 0) + Number(amount);
     user.transactions = user.transactions || [];
@@ -150,7 +152,6 @@ router.post("/manual-credit", protect, isAdmin, async (req, res) => {
     });
 
     await user.save();
-
     console.log(`✅ Manually credited ₦${amount} to ${user.email}`);
     res.json({
       success: true,
@@ -173,21 +174,14 @@ router.post("/buy-airtime", protect, async (req, res) => {
 
   try {
     const user = await User.findById(req.user._id);
-
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    if ((user.balance || 0) < amount) {
-      return res.status(400).json({ error: "Insufficient balance" });
-    }
+    if (!user) return res.status(404).json({ error: "User not found" });
+    if ((user.balance || 0) < amount) return res.status(400).json({ error: "Insufficient balance" });
 
     const requestID = `AIRTIME-${Date.now()}`;
-
     const gsubzRes = await axios.post(
       "https://gsubz.com/api/pay",
       {
-        serviceID,   // e.g., "mtn", "glo", "airtel", "9mobile"
+        serviceID,
         amount,
         phone,
         requestID,
@@ -206,7 +200,6 @@ router.post("/buy-airtime", protect, async (req, res) => {
       return res.status(500).json({ error: "Airtime purchase failed", gsubzResponse: gsubzRes.data });
     }
 
-    // 💸 Deduct balance
     user.balance -= amount;
     user.transactions = user.transactions || [];
     user.transactions.push({
@@ -221,7 +214,6 @@ router.post("/buy-airtime", protect, async (req, res) => {
     });
 
     await user.save();
-
     console.log(`📱 Airtime ₦${amount} sent to ${phone} via ${serviceID}`);
     res.json({
       success: true,
