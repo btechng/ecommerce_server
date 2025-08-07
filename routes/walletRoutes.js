@@ -127,32 +127,42 @@ router.get("/transactions", protect, async (req, res) => {
 
 // ✅ Manual Credit by Admin
 router.post("/manual-credit", protect, isAdmin, async (req, res) => {
+  const { email, amount } = req.body;
+
+  if (!email || !amount) {
+    return res.status(400).json({ error: "Email and amount are required" });
+  }
+
   try {
-    const { email, amount } = req.body;
-
-    if (!email || !amount) {
-      return res.status(400).json({ error: "email and amount are required" });
-    }
-
     const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ error: "User not found" });
 
-    let wallet = await Wallet.findOne({ userId: user._id });
-
-    if (!wallet) {
-      wallet = new Wallet({ userId: user._id, balance: 0 });
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
     }
 
-    wallet.balance += Number(amount);
-    await wallet.save();
+    user.balance = (user.balance || 0) + Number(amount);
+    user.transactions = user.transactions || [];
+    user.transactions.push({
+      type: "fund",
+      amount,
+      description: `Manual wallet top-up by admin`,
+      reference: `MANUAL-${Date.now()}`,
+      status: "success",
+      channel: "manual",
+      date: new Date(),
+    });
 
+    await user.save();
+
+    console.log(`✅ Manually credited ₦${amount} to ${user.email}`);
     res.json({
-      message: `Wallet funded with ₦${amount} for ${email}`,
-      wallet,
+      success: true,
+      message: `₦${amount} credited to ${user.email}`,
+      balance: user.balance,
     });
   } catch (err) {
-    console.error("Manual Credit Error:", err.message);
-    res.status(500).json({ error: "Internal server error" });
+    console.error("❌ Manual Credit Error:", err.message);
+    res.status(500).json({ error: "Failed to credit wallet" });
   }
 });
 router.post("/request-airtime", protect, async (req, res) => {
