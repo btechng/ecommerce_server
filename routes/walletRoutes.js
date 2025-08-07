@@ -1,3 +1,4 @@
+// routes/walletRoutes.js
 import express from "express";
 import axios from "axios";
 import crypto from "crypto";
@@ -5,7 +6,7 @@ import dotenv from "dotenv";
 import User from "../models/User.js";
 import AirtimeRequest from "../models/AirtimeRequest.js";
 import { protect, isAdmin } from "../middleware/authMiddleware.js";
-import { authMiddleware } from "../middleware/authMiddleware.js"; // in case `protect !== authMiddleware`
+import { authMiddleware } from "../middleware/authMiddleware.js";
 
 dotenv.config();
 const router = express.Router();
@@ -30,7 +31,7 @@ router.post("/fund", protect, async (req, res) => {
       "https://api.paystack.co/transaction/initialize",
       {
         email: req.user.email,
-        amount: amount * 100, // Paystack uses kobo
+        amount: amount * 100,
       },
       {
         headers: {
@@ -214,6 +215,17 @@ router.post("/buy-airtime", protect, async (req, res) => {
     });
 
     await user.save();
+
+    await AirtimeRequest.create({
+      userId: user._id,
+      type: "airtime",
+      network: serviceID,
+      phone,
+      amount,
+      requestID,
+      status: "processed",
+    });
+
     console.log(`📱 Airtime ₦${amount} sent to ${phone} via ${serviceID}`);
     res.json({
       success: true,
