@@ -2,6 +2,42 @@ import axios from "axios";
 import crypto from "crypto";
 import User from "../models/User.js";
 import Order from "../models/Order.js";
+import AirtimeRequest from "../models/AirtimeRequest.js";
+
+// ✅ Buy Airtime
+export const buyAirtime = async (req, res) => {
+  const { phone, amount, network } = req.body;
+  try {
+    await AirtimeRequest.create({
+      userId: req.user._id,
+      phone,
+      amount,
+      type: "airtime",
+      network,
+    });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to request airtime" });
+  }
+};
+
+// ✅ Buy Data
+export const buyData = async (req, res) => {
+  const { phone, plan, network, amount } = req.body;
+  try {
+    await AirtimeRequest.create({
+      userId: req.user._id,
+      phone,
+      amount,
+      plan,
+      type: "data",
+      network,
+    });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to request data" });
+  }
+};
 
 // 🔐 Fund Wallet - Initiate Paystack Payment
 export const fundWallet = async (req, res) => {
