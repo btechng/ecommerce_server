@@ -81,12 +81,20 @@ router.post(
   }
 );
 
-// ✅ Admin: Fund User Wallet Manually
+// ✅ Admin: Fund User Wallet by Email
 router.post("/manual-fund", protect, isAdmin, async (req, res) => {
-  const { userId, amount } = req.body;
+  const { email, amount } = req.body;
 
   try {
-    const user = await User.findById(userId);
+    if (!email || !email.includes("@")) {
+      return res.status(400).json({ message: "Invalid email" });
+    }
+
+    if (!amount || typeof amount !== "number" || amount <= 0) {
+      return res.status(400).json({ message: "Invalid amount" });
+    }
+
+    const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: "User not found" });
 
     user.walletBalance += amount;
@@ -99,8 +107,12 @@ router.post("/manual-fund", protect, isAdmin, async (req, res) => {
       description: "Manual funding by admin",
     });
 
-    res.json({ message: "Wallet manually funded successfully" });
+    res.json({
+      message: "Wallet manually funded successfully",
+      walletBalance: user.walletBalance,
+    });
   } catch (err) {
+    console.error("Manual fund error:", err);
     res.status(500).json({ message: "Manual funding failed" });
   }
 });
