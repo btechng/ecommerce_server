@@ -140,12 +140,15 @@ router.post("/manual-credit", protect, isAdmin, async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
+    // Update balance
     user.balance = (user.balance || 0) + Number(amount);
+
+    // Create transaction log
     user.transactions = user.transactions || [];
     user.transactions.push({
       type: "fund",
       amount,
-      description: `Manual wallet top-up by admin`,
+      description: `Manual wallet top-up by admin (${req.user.email})`,
       reference: `MANUAL-${Date.now()}`,
       status: "success",
       channel: "manual",
@@ -154,7 +157,8 @@ router.post("/manual-credit", protect, isAdmin, async (req, res) => {
 
     await user.save();
 
-    console.log(`✅ Manually credited ₦${amount} to ${user.email}`);
+    console.log(`✅ Admin (${req.user.email}) credited ₦${amount} to ${user.email}`);
+
     res.json({
       success: true,
       message: `₦${amount} credited to ${user.email}`,
