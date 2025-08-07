@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 
-// Middleware to protect routes (requires valid token)
+// ✅ Middleware to protect routes (requires valid token)
 export const protect = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
@@ -22,7 +22,7 @@ export const protect = async (req, res, next) => {
       return res.status(401).json({ error: "Unauthorized: User not found" });
     }
 
-    console.log(`🔐 Authenticated user: ${req.user.email}`);
+    console.log(`🔐 Authenticated user: ${req.user.email || req.user._id}`);
     next();
   } catch (err) {
     console.error("❌ Auth Middleware Error:", err.message);
@@ -30,7 +30,7 @@ export const protect = async (req, res, next) => {
   }
 };
 
-// Optional middleware to restrict to admins only
+// ✅ Optional middleware to restrict access to admins only
 export const isAdmin = (req, res, next) => {
   if (!req.user || req.user.role !== "admin") {
     console.warn(`🚫 Admin Access Denied for: ${req.user?.email || "Unknown user"}`);
