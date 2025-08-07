@@ -162,52 +162,28 @@ router.post("/manual-credit", protect, isAdmin, async (req, res) => {
   }
 });
 
-// ✅ Buy Airtime via Gsubz + Deduct from Wallet + Log Request
-router.post("/buy-airtime", protect, async (req, res) => {
-  const { serviceID, phone, amount } = req.body;
+router.post("/request-airtime", protect, async (req, res) => {
+  const { network, phone, amount } = req.body;
 
-  if (!serviceID || !phone || !amount) {
-    return res.status(400).json({ error: "serviceID, phone, and amount are required" });
+  if (!network || !phone || !amount) {
+    return res.status(400).json({ error: "Missing fields" });
   }
 
   try {
     const user = await User.findById(req.user._id);
     if (!user) return res.status(404).json({ error: "User not found" });
-    if ((user.balance || 0) < amount) return res.status(400).json({ error: "Insufficient balance" });
 
-    const requestID = `AIRTIME-${Date.now()}`;
-    const gsubzRes = await axios.post(
-      "https://gsubz.com/api/pay",
-      {
-        serviceID,
-        amount,
-        phone,
-        requestID,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.GSUBZ_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    const { status, transactionID } = gsubzRes.data;
-
-    if (status !== "TRANSACTION_SUCCESSFUL") {
-      return res.status(500).json({ error: "Airtime purchase failed", gsubzResponse: gsubzRes.data });
+    if (user.balance < amount) {
+      return res.status(400).json({ error: "Insufficient wallet balance" });
     }
 
     user.balance -= amount;
-    user.transactions = user.transactions || [];
     user.transactions.push({
-      type: "airtime",
+      type: "airtime-request",
       amount,
-      description: `Airtime to ${phone} on ${serviceID}`,
-      reference: requestID,
-      status: "success",
-      channel: "gsubz",
-      transactionID,
+      description: `Manual Airtime request for ${phone}`,
+      reference: `REQ-AIR-${Date.now()}`,
+      status: "pending",
       date: new Date(),
     });
 
@@ -216,28 +192,64 @@ router.post("/buy-airtime", protect, async (req, res) => {
     await AirtimeRequest.create({
       userId: user._id,
       type: "airtime",
-      network: serviceID,
+      network,
       phone,
       amount,
-      requestID,
-      status: "processed",
+      requestID: `REQ-AIR-${Date.now()}`,
+      status: "pending",
     });
 
-    console.log(`📱 Airtime ₦${amount} sent to ${phone} via ${serviceID}`);
-    res.json({
-      success: true,
-      message: `₦${amount} airtime sent to ${phone}`,
-      transactionID,
-      balance: user.balance,
-    });
+    res.json({ success: true, message: "Airtime request submitted", balance: user.balance });
   } catch (err) {
-    const errorMessage = err.response?.data?.message || err.message;
-    console.error("❌ Airtime Error:", errorMessage);
-    res.status(500).json({
-      error: "Airtime purchase failed",
-      details: err.response?.data || errorMessage,
-    });
+    console.error("❌ Airtime Request Error:", err.message);
+    res.status(500).json({ error: "Failed to submit airtime request" });
   }
 });
+router.post("/request-data", protect, async (req, res) => {
+  const { network, phone, plan, planId, price } = req.body;
+
+  if (!network || !phone || !plan || !planId || !price) {
+    return res.status(400).json({ error: "Missing fields" });
+  }
+
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    if (user.balance < price) {
+      return res.status(400).json({ error: "Insufficient wallet balance" });
+    }
+
+    user.balance -= price;
+    user.transactions.push({
+      type: "data-request",
+      amount: price,
+      description: `Manual Data request (${plan}) for ${phone}`,
+      reference: `REQ-DATA-${Date.now()}`,
+      status: "pending",
+      date: new Date(),
+    });
+
+    await user.save();
+
+    await AirtimeRequest.create({
+      userId: user._id,
+      type: "data",
+      network,
+      phone,
+      plan,
+      planId,
+      amount: price,
+      requestID: `REQ-DATA-${Date.now()}`,
+      status: "pending",
+    });
+
+    res.json({ success: true, message: "Data request submitted", balance: user.balance });
+  } catch (err) {
+    console.error("❌ Data Request Error:", err.message);
+    res.status(500).json({ error: "Failed to submit data request" });
+  }
+});
+
 
 export default router;
