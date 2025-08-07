@@ -116,6 +116,16 @@ router.delete("/:id", protect, isAdmin, async (req, res) => {
   }
 });
 
+// GET: Admin fetches pending products
+router.get("/pending", protect, isAdmin, async (req, res) => {
+  try {
+    const pendingProducts = await Product.find({ isApproved: false }).populate("postedBy", "name email");
+    res.json(pendingProducts);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 📦 GET: Single product by ID (only approved)
 router.get("/:id", async (req, res) => {
   try {
