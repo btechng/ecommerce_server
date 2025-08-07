@@ -1,9 +1,9 @@
 import express from "express";
 import axios from "axios";
-import { protect, isAdmin } from "../middleware/authMiddleware.js";
-import User from "../models/User.js";
-import WalletTransaction from "../models/WalletTransaction.js";
+import crypto from "crypto";
 import dotenv from "dotenv";
+import User from "../models/User.js";
+import { protect, isAdmin } from "../middleware/authMiddleware.js";
 
 dotenv.config();
 
@@ -18,194 +18,148 @@ router.post("/fund", protect, async (req, res) => {
       "https://api.paystack.co/transaction/initialize",
       {
         email: req.user.email,
-        amount: amount * 100,
-        callback_url: "https://ecommercengng.netlify.app/profile",
+        amount: amount * 100, // Paystack uses kobo
       },
       {
         headers: {
           Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-          "Content-Type": "application/json",
         },
       }
     );
 
-    res.json({ authorization_url: response.data.data.authorization_url });
-  } catch (error) {
-    res.status(500).json({ message: "Failed to initiate funding" });
+    res.json(response.data);
+  } catch (err) {
+    console.error("❌ Fund Wallet Error:", err.message);
+    res.status(500).json({ error: "Payment initialization failed" });
   }
 });
 
-// ✅ Verify Paystack Transaction
+// ✅ Webhook to verify Paystack transaction and fund user wallet
 router.post(
-  "/verify",
-  protect,
+  "/webhook",
   express.raw({ type: "application/json" }),
   async (req, res) => {
     const secret = process.env.PAYSTACK_SECRET_KEY;
-    const hash = require("crypto")
+    const hash = crypto
       .createHmac("sha512", secret)
-      .update(JSON.stringify(req.body))
+      .update(req.body)
       .digest("hex");
+    const signature = req.headers["x-paystack-signature"];
 
-    if (hash !== req.headers["x-paystack-signature"]) {
-      return res.status(401).send("Unauthorized");
+    if (hash !== signature) {
+      return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const event = req.body.event;
+    const event = JSON.parse(req.body.toString());
 
-    if (event === "charge.success") {
-      const amount = req.body.data.amount / 100;
-      const email = req.body.data.customer.email;
+    if (event.event === "charge.success") {
+      const email = event.data.customer.email;
+      const amount = event.data.amount / 100;
+      const reference = event.data.reference;
 
       try {
         const user = await User.findOne({ email });
-        if (!user) return res.status(404).send("User not found");
 
-        user.walletBalance += amount;
-        await user.save();
+        if (!user) {
+          return res.status(404).json({ error: "User not found" });
+        }
 
-        await WalletTransaction.create({
-          user: user._id,
-          type: "credit",
+        const alreadyExists = user.transactions?.some(
+          (tx) => tx.reference === reference
+        );
+
+        if (alreadyExists) {
+          console.log("⚠️ Duplicate transaction detected:", reference);
+          return res.sendStatus(200);
+        }
+
+        user.balance = (user.balance || 0) + amount;
+        user.transactions = user.transactions || [];
+        user.transactions.push({
+          type: "fund",
           amount,
           description: "Wallet funded via Paystack",
+          reference,
+          status: "success",
+          channel: event.data.channel || "paystack",
+          gateway_response: event.data.gateway_response || "",
+          date: new Date(),
         });
 
+        await user.save();
+
+        console.log(`✅ Wallet funded: ₦${amount} → ${user.email}`);
         res.sendStatus(200);
       } catch (err) {
-        res.status(500).send("Internal Server Error");
+        console.error("❌ Wallet Update Error:", err.message);
+        res.status(500).json({ error: "Wallet update failed" });
       }
     } else {
-      res.sendStatus(200);
+      res.sendStatus(200); // Accept other events silently
     }
   }
 );
 
-// ✅ Admin: Fund User Wallet by Email
-router.post("/manual-fund", protect, isAdmin, async (req, res) => {
+// ✅ Get Wallet Balance
+router.get("/balance", protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select("balance");
+    res.json({ balance: user.balance || 0 });
+  } catch (err) {
+    console.error("❌ Balance Error:", err.message);
+    res.status(500).json({ error: "Failed to fetch balance" });
+  }
+});
+
+// ✅ Get Wallet Transactions
+router.get("/transactions", protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select("transactions");
+    res.json({ transactions: user.transactions || [] });
+  } catch (err) {
+    console.error("❌ Transactions Error:", err.message);
+    res.status(500).json({ error: "Failed to fetch transactions" });
+  }
+});
+
+// ✅ Manual Credit by Admin
+router.post("/manual-credit", protect, isAdmin, async (req, res) => {
   const { email, amount } = req.body;
 
+  if (!email || !amount) {
+    return res.status(400).json({ error: "Email and amount are required" });
+  }
+
   try {
-    if (!email || !email.includes("@")) {
-      return res.status(400).json({ message: "Invalid email" });
-    }
-
-    if (!amount || typeof amount !== "number" || amount <= 0) {
-      return res.status(400).json({ message: "Invalid amount" });
-    }
-
     const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ message: "User not found" });
 
-    user.walletBalance += amount;
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    user.balance = (user.balance || 0) + Number(amount);
+    user.transactions = user.transactions || [];
+    user.transactions.push({
+      type: "fund",
+      amount,
+      description: `Manual wallet top-up by admin`,
+      reference: `MANUAL-${Date.now()}`,
+      status: "success",
+      channel: "manual",
+      date: new Date(),
+    });
+
     await user.save();
 
-    await WalletTransaction.create({
-      user: user._id,
-      type: "credit",
-      amount,
-      description: "Manual funding by admin",
-    });
-
+    console.log(`✅ Manually credited ₦${amount} to ${user.email}`);
     res.json({
-      message: "Wallet manually funded successfully",
-      walletBalance: user.walletBalance,
+      success: true,
+      message: `₦${amount} credited to ${user.email}`,
+      balance: user.balance,
     });
   } catch (err) {
-    console.error("Manual fund error:", err);
-    res.status(500).json({ message: "Manual funding failed" });
-  }
-});
-
-// 📲 Buy Airtime via Gsubz API
-router.post("/buy-airtime", protect, async (req, res) => {
-  const { network, amount, phone } = req.body;
-
-  try {
-    const user = await User.findById(req.user._id);
-    if (!user || user.walletBalance < amount) {
-      return res.status(400).json({ message: "Insufficient balance" });
-    }
-
-    const response = await axios.post(
-      "https://gsubz.com/api/airtime",
-      {
-        network,
-        amount,
-        mobile_number: phone,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.GSUBZ_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    if (response.data.success) {
-      user.walletBalance -= amount;
-      await user.save();
-
-      await WalletTransaction.create({
-        user: user._id,
-        type: "debit",
-        amount,
-        description: `Airtime purchase on ${phone}`,
-      });
-
-      return res.json({ message: "Airtime purchase successful" });
-    } else {
-      return res.status(400).json({ message: "Airtime purchase failed" });
-    }
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Airtime API failed" });
-  }
-});
-
-// 📡 Buy Data via Gsubz API
-router.post("/buy-data", protect, async (req, res) => {
-  const { network, variation_id, phone, amount } = req.body;
-
-  try {
-    const user = await User.findById(req.user._id);
-    if (!user || user.walletBalance < amount) {
-      return res.status(400).json({ message: "Insufficient balance" });
-    }
-
-    const response = await axios.post(
-      "https://gsubz.com/api/data",
-      {
-        network,
-        variation_id,
-        mobile_number: phone,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.GSUBZ_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    if (response.data.success) {
-      user.walletBalance -= amount;
-      await user.save();
-
-      await WalletTransaction.create({
-        user: user._id,
-        type: "debit",
-        amount,
-        description: `Data purchase on ${phone}`,
-      });
-
-      return res.json({ message: "Data purchase successful" });
-    } else {
-      return res.status(400).json({ message: "Data purchase failed" });
-    }
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Data API failed" });
+    console.error("❌ Manual Credit Error:", err.message);
+    res.status(500).json({ error: "Failed to credit wallet" });
   }
 });
 
