@@ -1,7 +1,8 @@
 import express from "express";
 import axios from "axios";
-import { protect, adminOnly } from "../middleware/authMiddleware.js";
+import { protect, isAdmin } from "../middleware/authMiddleware.js";
 import User from "../models/User.js";
+import WalletTransaction from "../models/WalletTransaction.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -81,7 +82,7 @@ router.post(
 );
 
 // ✅ Admin: Fund User Wallet Manually
-router.post("/manual-fund", protect, adminOnly, async (req, res) => {
+router.post("/manual-fund", protect, isAdmin, async (req, res) => {
   const { userId, amount } = req.body;
 
   try {
