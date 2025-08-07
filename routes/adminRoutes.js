@@ -1,5 +1,6 @@
 import express from "express";
 import User from "../models/User.js";
+import Wallet from "../models/Wallet.js";
 import { protect, isAdmin } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
