@@ -1,4 +1,3 @@
-// routes/walletRoutes.js
 import express from "express";
 import axios from "axios";
 import crypto from "crypto";
@@ -6,13 +5,12 @@ import dotenv from "dotenv";
 import User from "../models/User.js";
 import AirtimeRequest from "../models/AirtimeRequest.js";
 import { protect, isAdmin } from "../middleware/authMiddleware.js";
-import { authMiddleware } from "../middleware/authMiddleware.js";
 
 dotenv.config();
 const router = express.Router();
 
 // 🧾 ADMIN: Get All Airtime Requests
-router.get("/requests", authMiddleware, isAdmin, async (req, res) => {
+router.get("/requests", protect, isAdmin, async (req, res) => {
   try {
     const requests = await AirtimeRequest.find().populate("userId", "name email");
     res.json(requests);
@@ -72,7 +70,6 @@ router.post(
 
       try {
         const user = await User.findOne({ email });
-
         if (!user) return res.status(404).json({ error: "User not found" });
 
         const alreadyExists = user.transactions?.some(
@@ -165,7 +162,7 @@ router.post("/manual-credit", protect, isAdmin, async (req, res) => {
   }
 });
 
-// ✅ Buy Airtime via Gsubz
+// ✅ Buy Airtime via Gsubz + Deduct from Wallet + Log Request
 router.post("/buy-airtime", protect, async (req, res) => {
   const { serviceID, phone, amount } = req.body;
 
