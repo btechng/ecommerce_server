@@ -163,4 +163,73 @@ router.post("/manual-credit", protect, isAdmin, async (req, res) => {
   }
 });
 
+// ✅ Buy Airtime via Gsubz
+router.post("/buy-airtime", protect, async (req, res) => {
+  const { network, phone, amount } = req.body;
+
+  if (!network || !phone || !amount) {
+    return res.status(400).json({ error: "Network, phone, and amount are required" });
+  }
+
+  try {
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if ((user.balance || 0) < amount) {
+      return res.status(400).json({ error: "Insufficient balance" });
+    }
+
+    // 🛰 Call Gsubz API
+    const gsubzRes = await axios.post(
+      "https://www.gsubz.com/api/airtime",
+      {
+        network,
+        amount,
+        phone,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.GSUBZ_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const { success, data, message } = gsubzRes.data;
+
+    if (!success) {
+      return res.status(500).json({ error: message || "Airtime purchase failed" });
+    }
+
+    // 💸 Deduct balance
+    user.balance -= amount;
+    user.transactions = user.transactions || [];
+    user.transactions.push({
+      type: "airtime",
+      amount,
+      description: `Airtime purchase to ${phone} on ${network}`,
+      reference: `AIRTIME-${Date.now()}`,
+      status: "success",
+      channel: "gsubz",
+      date: new Date(),
+    });
+
+    await user.save();
+
+    console.log(`📱 Airtime ₦${amount} sent to ${phone} via ${network}`);
+    res.json({
+      success: true,
+      message: `₦${amount} airtime sent to ${phone}`,
+      data,
+      balance: user.balance,
+    });
+  } catch (err) {
+    console.error("❌ Airtime Error:", err.response?.data || err.message);
+    res.status(500).json({ error: "Airtime purchase failed", details: err.response?.data || err.message });
+  }
+});
+
 export default router;
