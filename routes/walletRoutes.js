@@ -53,28 +53,32 @@ router.patch("/data-requests/:id", async (req, res) => {
   }
 });
 
-router.put("/requests/:id/status", protect, isAdmin, async (req, res) => {
+router.patch("/requests/:id/status", protect, async (req, res) => {
   const { status } = req.body;
-  const validStatuses = ["pending", "completed", "failed"];
 
+  const validStatuses = ["completed", "failed"];
   if (!validStatuses.includes(status)) {
-    return res.status(400).json({ error: "Invalid status" });
+    return res.status(400).json({ error: "Invalid status. Must be 'completed' or 'failed'" });
   }
 
   try {
-    const request = await AirtimeRequest.findById(req.params.id);
+    const updatedRequest = await AirtimeRequest.findByIdAndUpdate(
+      req.params.id,
+      { status },
+      { new: true }
+    );
 
-    if (!request) {
+    if (!updatedRequest) {
       return res.status(404).json({ error: "Request not found" });
     }
 
-    request.status = status;
-    await request.save();
-
-    res.json({ message: `Request ${status}`, data: request });
-  } catch (err) {
-    console.error("❌ Error updating request status:", err);
-    res.status(500).json({ error: "Failed to update request status" });
+    res.json({
+      message: `Request marked as ${status}`,
+      data: updatedRequest,
+    });
+  } catch (error) {
+    console.error("❌ Failed to update airtime request status:", error.message);
+    res.status(500).json({ error: "Server error updating status" });
   }
 });
 
