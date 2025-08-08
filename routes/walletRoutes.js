@@ -6,6 +6,7 @@ import User from "../models/User.js";
 import AirtimeRequest from "../models/AirtimeRequest.js";
 import DataRequest from "../models/DataRequest.js";
 import WalletTransaction from "../models/WalletTransaction.js";
+import nodemailer from "nodemailer";
 import { protect, isAdmin } from "../middleware/authMiddleware.js";
 
 dotenv.config();
@@ -14,7 +15,9 @@ const router = express.Router();
 // 🧾 ADMIN: Get All Airtime Requests
 router.get("/requests", protect, isAdmin, async (req, res) => {
   try {
-    const requests = await AirtimeRequest.find().populate("userId", "name email").sort({ createdAt: -1 });
+    const requests = await AirtimeRequest.find()
+      .populate("userId", "name email")
+      .sort({ createdAt: -1 });
     res.json(requests);
   } catch (err) {
     console.error("❌ Request Fetch Error:", err.message);
@@ -216,7 +219,9 @@ router.post("/manual-credit", protect, isAdmin, async (req, res) => {
 
     await user.save();
 
-    console.log(`✅ Admin (${req.user.email}) credited ₦${amount} to ${user.email}`);
+    console.log(
+      `✅ Admin (${req.user.email}) credited ₦${amount} to ${user.email}`
+    );
 
     res.json({
       success: true,
@@ -265,7 +270,17 @@ router.post("/request-airtime", protect, async (req, res) => {
       status: "pending",
     });
 
-    res.json({ success: true, message: "Airtime request submitted", balance: user.balance });
+    // ✅ Notify admin
+    await sendAdminNotification(
+      "New Airtime Request Pending",
+      `User ${user.name} (${user.email}) requested ${amount} airtime for ${network} - ${phone}.`
+    );
+
+    res.json({
+      success: true,
+      message: "Airtime request submitted",
+      balance: user.balance,
+    });
   } catch (err) {
     console.error("❌ Airtime Request Error:", err.message);
     res.status(500).json({ error: "Failed to submit airtime request" });
@@ -286,11 +301,9 @@ router.post("/request-data", async (req, res) => {
       return res.status(400).json({ error: "Insufficient wallet balance" });
     }
 
-    // Deduct balance
     user.balance -= price;
     await user.save();
 
-    // Save request for admin to process
     const dataRequest = new DataRequest({
       user: user._id,
       network,
@@ -302,7 +315,6 @@ router.post("/request-data", async (req, res) => {
     });
     await dataRequest.save();
 
-    // Log transaction
     const transaction = new WalletTransaction({
       user: user._id,
       type: "debit",
@@ -310,6 +322,12 @@ router.post("/request-data", async (req, res) => {
       description: `Data purchase: ${network} ${plan}`,
     });
     await transaction.save();
+
+    // ✅ Notify admin
+    await sendAdminNotification(
+      "New Data Request Pending",
+      `User ${user.name} (${user.email}) requested data plan ${plan} on ${network} for ${phone}. Price: ${price}`
+    );
 
     res.json({ message: "Data request submitted successfully" });
   } catch (err) {
@@ -356,13 +374,16 @@ router.post("/request-data", protect, async (req, res) => {
       status: "pending",
     });
 
-    res.json({ success: true, message: "Data request submitted", balance: user.balance });
+    res.json({
+      success: true,
+      message: "Data request submitted",
+      balance: user.balance,
+    });
   } catch (err) {
     console.error("❌ Data Request Error:", err.message);
     res.status(500).json({ error: "Failed to submit data request" });
   }
 });
-
 
 // ✅ Buy Airtime via Gsubz
 router.post("/buy-airtime", protect, async (req, res) => {
@@ -406,12 +427,10 @@ router.post("/buy-airtime", protect, async (req, res) => {
     const { status, transactionID } = gsubzRes.data;
 
     if (status !== "TRANSACTION_SUCCESSFUL") {
-      return res
-        .status(500)
-        .json({
-          error: "Airtime purchase failed",
-          gsubzResponse: gsubzRes.data,
-        });
+      return res.status(500).json({
+        error: "Airtime purchase failed",
+        gsubzResponse: gsubzRes.data,
+      });
     }
 
     // 💸 Deduct balance
