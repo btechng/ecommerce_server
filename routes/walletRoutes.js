@@ -4,6 +4,8 @@ import crypto from "crypto";
 import dotenv from "dotenv";
 import User from "../models/User.js";
 import AirtimeRequest from "../models/AirtimeRequest.js";
+import DataRequest from "../models/DataRequest.js";
+import WalletTransaction from "../models/WalletTransaction.js";
 import { protect, isAdmin } from "../middleware/authMiddleware.js";
 
 dotenv.config();
@@ -17,6 +19,17 @@ router.get("/requests", protect, isAdmin, async (req, res) => {
   } catch (err) {
     console.error("❌ Request Fetch Error:", err.message);
     res.status(500).json({ error: "Failed to fetch airtime requests" });
+  }
+});
+router.get("/data-requests", async (req, res) => {
+  try {
+    const requests = await DataRequest.find()
+      .populate("user", "name email")
+      .sort({ createdAt: -1 });
+    res.json(requests);
+  } catch (err) {
+    console.error("Error fetching data requests:", err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
@@ -210,6 +223,52 @@ router.post("/request-airtime", protect, async (req, res) => {
   } catch (err) {
     console.error("❌ Airtime Request Error:", err.message);
     res.status(500).json({ error: "Failed to submit airtime request" });
+  }
+});
+router.post("/request-data", async (req, res) => {
+  try {
+    const { userId, network, phone, plan, planId, price } = req.body;
+
+    if (!userId || !network || !phone || !plan || !price || !planId) {
+      return res.status(400).json({ error: "Missing fields" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    if (user.balance < price) {
+      return res.status(400).json({ error: "Insufficient wallet balance" });
+    }
+
+    // Deduct balance
+    user.balance -= price;
+    await user.save();
+
+    // Save request for admin to process
+    const dataRequest = new DataRequest({
+      user: user._id,
+      network,
+      phone,
+      plan,
+      planId,
+      price,
+      status: "pending",
+    });
+    await dataRequest.save();
+
+    // Log transaction
+    const transaction = new WalletTransaction({
+      user: user._id,
+      type: "debit",
+      amount: price,
+      description: `Data purchase: ${network} ${plan}`,
+    });
+    await transaction.save();
+
+    res.json({ message: "Data request submitted successfully" });
+  } catch (err) {
+    console.error("Error handling data request:", err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 router.post("/request-data", protect, async (req, res) => {
