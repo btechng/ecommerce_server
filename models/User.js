@@ -5,8 +5,17 @@ const transactionSchema = new mongoose.Schema({
   type: {
     type: String,
     required: true, // e.g. 'fund', 'purchase', 'withdrawal', 'transfer'
-    enum: ["fund", "purchase", "withdrawal", "transfer"],
+    enum: ["fund", "purchase", "withdrawal", "transfer", "airtime-request", "data-request"],
   },
+  channel: {
+  type: String,
+  default: "unknown"
+},
+status: {
+  type: String,
+  enum: ["success", "pending", "failed"],
+  default: "success"
+},
   amount: {
     type: Number,
     required: true,

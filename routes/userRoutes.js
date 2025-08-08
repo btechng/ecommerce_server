@@ -5,6 +5,23 @@ import { protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
+// ✅ Get all users (admin only)
+// ✅ Get all users (admin only)
+router.get("/", protect, async (req, res) => {
+  try {
+    // Ensure user is authenticated and has admin role
+    if (!req.user || req.user.role !== "admin") {
+      return res.status(403).json({ message: "Access denied: Admins only" });
+    }
+
+    // Get all users excluding password and __v
+    const users = await User.find().select("-password -__v");
+    res.status(200).json(users);
+  } catch (err) {
+    console.error("Failed to fetch users:", err.message);
+    res.status(500).json({ message: "Failed to fetch users", error: err.message });
+  }
+});
 // ✅ Get user profile by id (must be logged in)
 router.get("/:id", protect, async (req, res) => {
   try {

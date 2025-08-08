@@ -16,12 +16,15 @@ const productSchema = new mongoose.Schema(
     price: { type: Number }, // Optional for job listings
     imageUrl: { type: String },
     category: { type: String, required: true },
-    categorySlug: { type: String }, // Auto-generated from category
-    stock: { type: Number, default: 1 }, // Can be 0 for job listings
+    categorySlug: { type: String },
+    stock: { type: Number, default: 1 },
     location: { type: String },
     phoneNumber: { type: String },
-    email: { type: String }, // For job listings
-    isApproved: { type: Boolean, default: false }, // ✅ Admin approval flag
+    email: { type: String },
+
+    isApproved: { type: Boolean, default: false },
+    approvalDate: { type: Date }, // ✅ <-- Add this line
+
     reviews: [reviewSchema],
     numReviews: { type: Number, default: 0 },
     rating: { type: Number, default: 0 },

@@ -116,6 +116,39 @@ router.delete("/:id", protect, isAdmin, async (req, res) => {
   }
 });
 
+// GET: Admin fetches pending products
+router.get("/pending", protect, isAdmin, async (req, res) => {
+  try {
+    console.log("✅ [ADMIN] Fetching pending products...");
+
+    const pendingProducts = await Product.find({ isApproved: false });
+
+    console.log("🔍 Found:", pendingProducts.length, "pending products");
+    res.json(pendingProducts);
+  } catch (err) {
+    console.error("❌ Error in /pending route:", err);
+    res.status(500).json({ error: err.message || "Server error" });
+  }
+});
+
+// ✅ PUT: Admin updates product approval status (approve/reject)
+router.put("/:id/status", protect, isAdmin, async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) return res.status(404).json({ error: "Product not found" });
+
+    const { status } = req.body;
+    product.isApproved = status === "approved";
+    product.approvalDate = product.isApproved ? new Date() : null;
+
+    await product.save();
+
+    res.json({ message: `Product ${status}`, product });
+  } catch (err) {
+    console.error("Error updating product status:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
 // 📦 GET: Single product by ID (only approved)
 router.get("/:id", async (req, res) => {
   try {
