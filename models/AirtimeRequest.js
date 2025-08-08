@@ -8,7 +8,7 @@ const airtimeRequestSchema = new mongoose.Schema({
   type: { type: String, enum: ["airtime", "data"] },
   network: String,
   plan: String, // optional, for data
-  status: { type: String, enum: ["pending", "completed"], default: "pending" },
+  status: { type: String, enum: ["pending", "completed", "failed"], default: "pending" },
   createdAt: { type: Date, default: Date.now }
 });
 
