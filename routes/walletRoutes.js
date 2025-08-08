@@ -53,7 +53,7 @@ router.patch("/data-requests/:id", async (req, res) => {
   }
 });
 
-router.put("/requests/:id/airtime-status", protect, async (req, res) => {
+router.put("/requests/:id/status", protect, isAdmin, async (req, res) => {
   const { status } = req.body;
   const validStatuses = ["pending", "completed", "failed"];
 
@@ -62,20 +62,19 @@ router.put("/requests/:id/airtime-status", protect, async (req, res) => {
   }
 
   try {
-    const updated = await AirtimeRequest.findByIdAndUpdate(
-      req.params.id,
-      { status },
-      { new: true }
-    );
+    const request = await AirtimeRequest.findById(req.params.id);
 
-    if (!updated) {
-      return res.status(404).json({ error: "Airtime request not found" });
+    if (!request) {
+      return res.status(404).json({ error: "Request not found" });
     }
 
-    res.json({ message: "Airtime request status updated", data: updated });
+    request.status = status;
+    await request.save();
+
+    res.json({ message: `Request ${status}`, data: request });
   } catch (err) {
-    console.error("❌ Airtime status update error:", err.message);
-    res.status(500).json({ error: "Failed to update airtime status" });
+    console.error("❌ Error updating request status:", err);
+    res.status(500).json({ error: "Failed to update request status" });
   }
 });
 
