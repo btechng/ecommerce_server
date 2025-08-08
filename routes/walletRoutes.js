@@ -6,7 +6,6 @@ import User from "../models/User.js";
 import AirtimeRequest from "../models/AirtimeRequest.js";
 import DataRequest from "../models/DataRequest.js";
 import WalletTransaction from "../models/WalletTransaction.js";
-import nodemailer from "nodemailer";
 import { protect, isAdmin } from "../middleware/authMiddleware.js";
 
 dotenv.config();
@@ -270,12 +269,6 @@ router.post("/request-airtime", protect, async (req, res) => {
       status: "pending",
     });
 
-    // ✅ Notify admin
-    await sendAdminNotification(
-      "New Airtime Request Pending",
-      `User ${user.name} (${user.email}) requested ${amount} airtime for ${network} - ${phone}.`
-    );
-
     res.json({
       success: true,
       message: "Airtime request submitted",
@@ -301,9 +294,11 @@ router.post("/request-data", async (req, res) => {
       return res.status(400).json({ error: "Insufficient wallet balance" });
     }
 
+    // Deduct balance
     user.balance -= price;
     await user.save();
 
+    // Save request for admin to process
     const dataRequest = new DataRequest({
       user: user._id,
       network,
@@ -315,6 +310,7 @@ router.post("/request-data", async (req, res) => {
     });
     await dataRequest.save();
 
+    // Log transaction
     const transaction = new WalletTransaction({
       user: user._id,
       type: "debit",
@@ -322,12 +318,6 @@ router.post("/request-data", async (req, res) => {
       description: `Data purchase: ${network} ${plan}`,
     });
     await transaction.save();
-
-    // ✅ Notify admin
-    await sendAdminNotification(
-      "New Data Request Pending",
-      `User ${user.name} (${user.email}) requested data plan ${plan} on ${network} for ${phone}. Price: ${price}`
-    );
 
     res.json({ message: "Data request submitted successfully" });
   } catch (err) {
