@@ -32,6 +32,26 @@ router.get("/data-requests", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+router.patch("/data-requests/:id", async (req, res) => {
+  const { status } = req.body;
+  const validStatuses = ["pending", "completed", "failed"];
+
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({ error: "Invalid status" });
+  }
+
+  try {
+    const updated = await DataRequest.findByIdAndUpdate(
+      req.params.id,
+      { status },
+      { new: true }
+    );
+    if (!updated) return res.status(404).json({ error: "Request not found" });
+    res.json({ message: "Status updated", data: updated });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update status" });
+  }
+});
 
 // 💰 Fund Wallet (Initiate Paystack)
 router.post("/fund", protect, async (req, res) => {
