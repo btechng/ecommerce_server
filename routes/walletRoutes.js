@@ -53,6 +53,32 @@ router.patch("/data-requests/:id", async (req, res) => {
   }
 });
 
+router.put("/requests/:id/airtime-status", protect, async (req, res) => {
+  const { status } = req.body;
+  const validStatuses = ["pending", "completed", "failed"];
+
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({ error: "Invalid status" });
+  }
+
+  try {
+    const updated = await AirtimeRequest.findByIdAndUpdate(
+      req.params.id,
+      { status },
+      { new: true }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ error: "Airtime request not found" });
+    }
+
+    res.json({ message: "Airtime request status updated", data: updated });
+  } catch (err) {
+    console.error("❌ Airtime status update error:", err.message);
+    res.status(500).json({ error: "Failed to update airtime status" });
+  }
+});
+
 // 💰 Fund Wallet (Initiate Paystack)
 router.post("/fund", protect, async (req, res) => {
   const { amount } = req.body;
