@@ -53,35 +53,29 @@ router.patch("/data-requests/:id", async (req, res) => {
   }
 });
 
-router.patch("/requests/:id/status", protect, async (req, res) => {
+router.patch("/requests/:id/status", async (req, res) => {
   const { status } = req.body;
+  const validStatuses = ["pending", "completed", "failed"];
 
-  const validStatuses = ["completed", "failed"];
   if (!validStatuses.includes(status)) {
-    return res.status(400).json({ error: "Invalid status. Must be 'completed' or 'failed'" });
+    return res.status(400).json({ error: "Invalid status" });
   }
 
   try {
-    const updatedRequest = await AirtimeRequest.findByIdAndUpdate(
+    const updated = await AirtimeRequest.findByIdAndUpdate(
       req.params.id,
       { status },
       { new: true }
     );
 
-    if (!updatedRequest) {
-      return res.status(404).json({ error: "Request not found" });
-    }
+    if (!updated) return res.status(404).json({ error: "Request not found" });
 
-    res.json({
-      message: `Request marked as ${status}`,
-      data: updatedRequest,
-    });
-  } catch (error) {
-    console.error("❌ Failed to update airtime request status:", error.message);
-    res.status(500).json({ error: "Server error updating status" });
+    res.json({ message: "Request status updated", data: updated });
+  } catch (err) {
+    console.error("❌ Error updating request status:", err.message);
+    res.status(500).json({ error: "Failed to update status" });
   }
 });
-
 // 💰 Fund Wallet (Initiate Paystack)
 router.post("/fund", protect, async (req, res) => {
   const { amount } = req.body;
