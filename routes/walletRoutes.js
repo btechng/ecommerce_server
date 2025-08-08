@@ -14,7 +14,7 @@ const router = express.Router();
 // 🧾 ADMIN: Get All Airtime Requests
 router.get("/requests", protect, isAdmin, async (req, res) => {
   try {
-    const requests = await AirtimeRequest.find().populate("userId", "name email");
+    const requests = await AirtimeRequest.find().populate("userId", "name email").sort({ createdAt: -1 });
     res.json(requests);
   } catch (err) {
     console.error("❌ Request Fetch Error:", err.message);
