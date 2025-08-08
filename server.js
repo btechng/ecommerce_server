@@ -2,6 +2,8 @@ import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
+import path from "path";
+import Product from "./models/Product.js"; // ✅ Make sure this path is correct
 
 // Load .env
 dotenv.config();
@@ -47,6 +49,64 @@ app.use("/api/trivia", triviaRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/wallet", walletRoutes);
 app.use("/api/admin", adminRoutes);
+
+// 📌 Dynamic OG Meta Tags for Product Pages
+app.get("/product/:id", async (req, res, next) => {
+  try {
+    const userAgent = req.headers["user-agent"] || "";
+    const isBot = /facebookexternalhit|twitterbot|whatsapp|discord|linkedin|googlebot/i.test(userAgent);
+
+    if (isBot) {
+      const product = await Product.findById(req.params.id);
+      if (!product) {
+        return res.status(404).send("Product not found");
+      }
+
+      const html = `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="utf-8">
+          <title>${product.name}</title>
+          <meta name="description" content="${product.description?.substring(0, 150) || ''}" />
+
+          <!-- Open Graph -->
+          <meta property="og:title" content="${product.name}" />
+          <meta property="og:description" content="${product.description?.substring(0, 150) || ''}" />
+          <meta property="og:image" content="${product.image}" />
+          <meta property="og:url" content="${process.env.BASE_URL}/product/${product._id}" />
+          <meta property="og:type" content="product" />
+
+          <!-- Twitter -->
+          <meta name="twitter:card" content="summary_large_image" />
+          <meta name="twitter:title" content="${product.name}" />
+          <meta name="twitter:description" content="${product.description?.substring(0, 150) || ''}" />
+          <meta name="twitter:image" content="${product.image}" />
+        </head>
+        <body>
+          Redirecting...
+         <script>window.location.href = "/product/${product._id}";</script>
+        </body>
+        </html>
+      `;
+      return res.send(html);
+    }
+
+    // If not a bot → continue to normal frontend route
+    next();
+  } catch (err) {
+    console.error(err);
+    next();
+  }
+});
+
+// 📌 Serve React frontend
+const __dirnamePath = path.resolve();
+app.use(express.static(path.join(__dirnamePath, "client/dist"))); // adjust build path
+
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirnamePath, "client/dist", "index.html"));
+});
 
 // 🚀 Start server
 const PORT = process.env.PORT || 5000;
