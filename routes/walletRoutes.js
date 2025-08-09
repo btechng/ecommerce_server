@@ -81,16 +81,19 @@ router.patch("/requests/:id/status", async (req, res) => {
   }
 });
 
-// 💰 Fund Wallet (Initiate Paystack)
 router.post("/fund", protect, async (req, res) => {
   const { amount } = req.body;
+
+  console.log("💰 Amount received:", amount);
+  console.log("👤 User in protect middleware:", req.user);
+  console.log("🔑 Paystack key present:", !!process.env.PAYSTACK_SECRET_KEY);
 
   try {
     const response = await axios.post(
       "https://api.paystack.co/transaction/initialize",
       {
-        email: req.user.email,
-        amount: amount * 100,
+        email: req.user?.email,
+        amount: Number(amount) * 100,
       },
       {
         headers: {
@@ -101,8 +104,10 @@ router.post("/fund", protect, async (req, res) => {
 
     res.json(response.data);
   } catch (err) {
-    console.error("❌ Fund Wallet Error:", err.message);
-    res.status(500).json({ error: "Payment initialization failed" });
+    console.error("❌ Fund Wallet Error:", err.response?.data || err.message);
+    res
+      .status(500)
+      .json({ error: err.response?.data || "Payment initialization failed" });
   }
 });
 
