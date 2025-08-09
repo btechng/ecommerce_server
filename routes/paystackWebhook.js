@@ -60,7 +60,7 @@ router.post("/", async (req, res) => {
             user.balance = (user.balance || 0) + amount;
             user.transactions = user.transactions || [];
             user.transactions.push({
-              type: "funding",
+              type: "fund",
               amount,
               description: `Wallet funded via webhook (${reference})`,
               date: new Date(),
