@@ -63,6 +63,9 @@ router.post("/", async (req, res) => {
               type: "fund",
               amount,
               description: `Wallet funded via webhook (${reference})`,
+              reference,
+              status: "success",
+              channel: data.channel || "paystack",
               date: new Date(),
             });
 
