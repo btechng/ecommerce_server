@@ -10,6 +10,7 @@ import { protect, isAdmin } from "../middleware/authMiddleware.js";
 
 dotenv.config();
 const router = express.Router();
+const taskncart = { shop: "https://taskncart.shop" };
 
 // 🧾 ADMIN: Get All Airtime Requests
 router.get("/requests", protect, isAdmin, async (req, res) => {
@@ -94,6 +95,7 @@ router.post("/fund", protect, async (req, res) => {
       {
         email: req.user?.email,
         amount: Number(amount) * 100,
+        callback_url: `${taskncart.shop}/wallet/fund/callback`,
       },
       {
         headers: {
@@ -108,6 +110,58 @@ router.post("/fund", protect, async (req, res) => {
     res
       .status(500)
       .json({ error: err.response?.data || "Payment initialization failed" });
+  }
+});
+router.get("/verify/:reference", protect, async (req, res) => {
+  const { reference } = req.params;
+
+  try {
+    const response = await axios.get(
+      `https://api.paystack.co/transaction/verify/${reference}`,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+        },
+      }
+    );
+
+    if (response.data.data.status === "success") {
+      const user = await User.findById(req.user._id);
+      if (!user) {
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found" });
+      }
+
+      const amountPaid = response.data.data.amount / 100; // convert kobo to Naira
+
+      // Update user balance
+      user.balance += amountPaid;
+
+      // Add transaction record
+      user.transactions.push({
+        type: "fund",
+        channel: response.data.data.channel || "paystack",
+        status: "success",
+        amount: amountPaid,
+        reference: response.data.data.reference,
+        description: "Wallet funding via Paystack",
+        date: new Date(response.data.data.paid_at || Date.now()),
+      });
+
+      await user.save();
+
+      return res.json({ success: true, newBalance: user.balance });
+    } else {
+      return res
+        .status(400)
+        .json({ success: false, message: "Payment not successful" });
+    }
+  } catch (error) {
+    console.error("Verification error:", error.response?.data || error.message);
+    return res
+      .status(500)
+      .json({ success: false, error: "Verification failed" });
   }
 });
 
