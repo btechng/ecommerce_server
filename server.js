@@ -17,6 +17,7 @@ import categoryRoutes from "./routes/categoryRoutes.js";
 import walletRoutes from "./routes/walletRoutes.js";
 import paystackWebhook from "./routes/paystackWebhook.js";
 import adminRoutes from "./routes/adminRoutes.js";
+import sitemapRoute from "./sitemap.js";
 
 const app = express();
 
@@ -47,6 +48,7 @@ app.use("/api/trivia", triviaRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/wallet", walletRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/", sitemapRoute);
 
 // 🚀 Start server
 const PORT = process.env.PORT || 5000;
